@@ -98,13 +98,12 @@ create index if not exists idx_subscriptions_user_status on public.subscriptions
 
 create or replace function public.set_updated_at()
 returns trigger
-language plpgsql
 as $$
 begin
   new.updated_at = now();
   return new;
 end;
-$$;
+$$ language plpgsql;
 
 drop trigger if exists rates_set_updated_at on public.rates;
 create trigger rates_set_updated_at
@@ -122,7 +121,6 @@ on conflict (key) do nothing;
 
 create or replace function public.is_admin()
 returns boolean
-language sql
 stable
 security definer
 set search_path = public
@@ -142,11 +140,10 @@ as $$
     ),
     false
   );
-$$;
+$$ language sql;
 
 create or replace function public.handle_new_user()
 returns trigger
-language plpgsql
 security definer
 set search_path = public
 as $$
@@ -165,7 +162,7 @@ begin
 
   return new;
 end;
-$$;
+$$ language plpgsql;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
@@ -174,7 +171,6 @@ for each row execute function public.handle_new_user();
 
 create or replace function public.protect_profile_subscription_fields()
 returns trigger
-language plpgsql
 security definer
 set search_path = public
 as $$
@@ -185,7 +181,7 @@ begin
 
   return new;
 end;
-$$;
+$$ language plpgsql;
 
 drop trigger if exists protect_profile_subscription_fields on public.profiles;
 create trigger protect_profile_subscription_fields
@@ -194,7 +190,6 @@ for each row execute function public.protect_profile_subscription_fields();
 
 create or replace function public.enforce_alert_plan_limits()
 returns trigger
-language plpgsql
 security definer
 set search_path = public
 as $$
@@ -232,7 +227,7 @@ begin
 
   return new;
 end;
-$$;
+$$ language plpgsql;
 
 drop trigger if exists enforce_alert_plan_limits on public.alerts;
 create trigger enforce_alert_plan_limits
