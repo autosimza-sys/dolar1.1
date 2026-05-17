@@ -6,12 +6,12 @@ import type { Rate, UserAlert } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 function isAuthorized(request: NextRequest) {
-  const secret = process.env.ALERTS_CRON_SECRET;
-  if (!secret) return true;
+  const secrets = [process.env.CRON_SECRET, process.env.ALERTS_CRON_SECRET].filter(Boolean);
+  if (!secrets.length) return true;
 
   const bearer = request.headers.get("authorization")?.replace("Bearer ", "");
   const querySecret = request.nextUrl.searchParams.get("secret");
-  return bearer === secret || querySecret === secret;
+  return Boolean((bearer && secrets.includes(bearer)) || (querySecret && secrets.includes(querySecret)));
 }
 
 export async function POST(request: NextRequest) {

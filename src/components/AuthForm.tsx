@@ -53,7 +53,11 @@ export function AuthForm({ compact = false, onSuccess }: AuthFormProps) {
             full_name: fullName || null
           });
         }
-        setMessage("Cuenta creada. Si Supabase pide confirmación, revisá tu email.");
+        setMessage(
+          data.session
+            ? "Cuenta creada. Ya podés guardar alertas."
+            : "Te mandamos un email para confirmar tu cuenta. Abrilo, tocá el enlace y después volvé a entrar."
+        );
         onSuccess?.();
       }
     } else {

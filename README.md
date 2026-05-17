@@ -30,6 +30,8 @@ npm run build
    - Site URL: `http://localhost:3000` en local.
    - En producción: la URL final de Vercel.
 
+Si Supabase tiene activada la confirmación por email, el usuario deberá abrir el mail y tocar el enlace antes de iniciar sesión. Es lo recomendado para evitar cuentas falsas.
+
 El SQL crea:
 
 - `profiles`
@@ -64,6 +66,8 @@ MERCADO_PAGO_PREAPPROVAL_PLAN_ID=
 MERCADO_PAGO_WEBHOOK_SECRET=cambiar-este-secreto
 PREMIUM_MONTHLY_PRICE=3500
 ALERTS_CRON_SECRET=cambiar-este-secreto
+CRON_SECRET=cambiar-este-secreto
+RATES_UPDATE_SECRET=cambiar-este-secreto
 ```
 
 ## 4. Desplegar en Vercel
@@ -153,7 +157,49 @@ En Vercel podés crear un Cron Job contra:
 
 Cuando una alerta se dispara, se guarda en `alert_logs`. Ahí se conectan proveedores reales de email o WhatsApp si querés enviar mensajes salientes.
 
-## 8. Cargar cotizaciones
+## 8. Actualización automática de cotizaciones
+
+La app incluye un actualizador automático:
+
+```text
+/api/rates/update
+```
+
+Fuentes incluidas:
+
+- DolarAPI para dólar oficial, blue, MEP y monedas oficiales.
+- BCRA API para tasa de plazo fijo 30 días y estimaciones mensuales.
+
+En Vercel ya queda configurado `vercel.json` con cron cada 30 minutos:
+
+```json
+{
+  "path": "/api/rates/update",
+  "schedule": "*/30 11-23 * * 1-5"
+}
+```
+
+Para que funcione en producción, cargá en Vercel:
+
+```env
+SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
+CRON_SECRET=un-secreto-largo
+RATES_UPDATE_SECRET=un-secreto-largo
+ALERTS_CRON_SECRET=un-secreto-largo
+```
+
+Prueba manual:
+
+```bash
+curl "https://TU-DOMINIO.vercel.app/api/rates/update?secret=TU_SECRET"
+```
+
+Notas:
+
+- Los blue de real, euro y peso chileno quedan para carga manual si no hay fuente confiable.
+- Si una cotización no tiene fuente confiable, el admin puede marcarla como `Sin fuente confiable` y ocultarla de la home.
+
+## 9. Cargar cotizaciones
 
 Desde `/admin`:
 
@@ -166,7 +212,7 @@ Desde `/admin`:
 
 Regla clave: si una moneda queda con `is_visible = false`, no aparece en la home.
 
-## 9. Estructura
+## 10. Estructura
 
 ```text
 src/app
@@ -184,7 +230,7 @@ src/lib
 supabase/schema.sql
 ```
 
-## 10. Datos demo
+## 11. Datos demo
 
 El SQL carga:
 
