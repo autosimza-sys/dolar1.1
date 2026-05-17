@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { evaluateAlert } from "@/lib/alert-rules";
+import { sendAlertEmail } from "@/lib/notifications";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import type { Profile } from "@/lib/types";
 import type { Rate, UserAlert } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -35,8 +37,13 @@ export async function POST(request: NextRequest) {
 
   const rates = (rateRows as Rate[] | null) ?? [];
   const alerts = (alertRows as UserAlert[] | null) ?? [];
+  const profileIds = Array.from(new Set(alerts.map((alert) => alert.user_id)));
+  const { data: profileRows } = profileIds.length
+    ? await supabase.from("profiles").select("*").in("id", profileIds)
+    : { data: [] };
+  const profiles = new Map(((profileRows as Profile[] | null) ?? []).map((profile) => [profile.id, profile]));
   const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-  const sent: Array<{ alert_id: string; message: string }> = [];
+  const sent: Array<{ alert_id: string; message: string; email?: string; email_status?: string }> = [];
 
   for (const alert of alerts) {
     const evaluation = evaluateAlert(alert, rates);
@@ -57,7 +64,22 @@ export async function POST(request: NextRequest) {
       message: evaluation.message
     });
 
-    sent.push({ alert_id: alert.id, message: evaluation.message });
+    const profile = profiles.get(alert.user_id);
+    let emailStatus = "sin email";
+
+    if (alert.channel === "email" && profile?.email) {
+      try {
+        const result = await sendAlertEmail({
+          to: profile.email,
+          message: evaluation.message
+        });
+        emailStatus = result.skipped ? (result.reason ?? "envío omitido") : "enviado";
+      } catch (error) {
+        emailStatus = error instanceof Error ? error.message : "falló el envío";
+      }
+    }
+
+    sent.push({ alert_id: alert.id, message: evaluation.message, email: profile?.email, email_status: emailStatus });
   }
 
   return NextResponse.json({ ok: true, checked: alerts.length, sent });
