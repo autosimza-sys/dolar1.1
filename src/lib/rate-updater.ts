@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { getErrorMessage } from "@/lib/error-message";
 import type { Rate } from "@/lib/types";
 
 type DolarApiRate = {
@@ -95,7 +96,7 @@ export async function updateRatesFromSources() {
 
   const startedAt = new Date().toISOString();
   const { data: currentRates, error: currentRatesError } = await supabase.from("rates").select("*");
-  if (currentRatesError) throw currentRatesError;
+  if (currentRatesError) throw new Error(getErrorMessage(currentRatesError, "No se pudieron leer las cotizaciones."));
 
   const oldRates = byCode((currentRates as Rate[] | null) ?? []);
   const updates: RateUpdate[] = [];
@@ -175,14 +176,14 @@ export async function updateRatesFromSources() {
 
   if (updates.length) {
     const { error } = await supabase.from("rates").upsert(updates, { onConflict: "code" });
-    if (error) throw error;
+    if (error) throw new Error(getErrorMessage(error, "No se pudieron guardar las cotizaciones."));
   }
 
   const updatedCodes = updates.map((item) => item.code);
   const status = errors.length && updatedCodes.length ? "partial" : errors.length ? "failed" : "success";
   const finishedAt = new Date().toISOString();
 
-  await supabase.from("source_update_logs").insert({
+  const { error: sourceLogError } = await supabase.from("source_update_logs").insert({
     source: "rates:update",
     status,
     updated_codes: updatedCodes,
@@ -191,7 +192,11 @@ export async function updateRatesFromSources() {
     finished_at: finishedAt
   });
 
-  await supabase.from("admin_settings").upsert(
+  if (sourceLogError) {
+    throw new Error(getErrorMessage(sourceLogError, "No se pudo guardar el log de fuentes."));
+  }
+
+  const { error: settingsError } = await supabase.from("admin_settings").upsert(
     {
       key: "last_rate_update",
       value: {
@@ -202,6 +207,10 @@ export async function updateRatesFromSources() {
     },
     { onConflict: "key" }
   );
+
+  if (settingsError) {
+    throw new Error(getErrorMessage(settingsError, "No se pudo guardar last_rate_update."));
+  }
 
   return {
     updated: updatedCodes,

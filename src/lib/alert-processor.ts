@@ -1,4 +1,5 @@
 import { evaluateAlert } from "@/lib/alert-rules";
+import { getErrorMessage } from "@/lib/error-message";
 import { sendAlertEmail } from "@/lib/notifications";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import type { NotificationJob, Profile, Rate, UserAlert } from "@/lib/types";
@@ -117,7 +118,7 @@ export async function processPendingNotificationJobs(maxJobs = 25) {
     .order("created_at", { ascending: true })
     .limit(maxJobs);
 
-  if (error) throw error;
+  if (error) throw new Error(getErrorMessage(error, "No se pudieron leer notification_jobs."));
 
   const jobs = (jobRows as NotificationJob[] | null) ?? [];
   const processed: Array<{ job_id: string; status: string; error?: string }> = [];
@@ -190,7 +191,7 @@ export async function processAlerts(options: ProcessAlertsOptions = {}) {
   ]);
 
   if (ratesError || alertsError) {
-    throw ratesError ?? alertsError;
+    throw new Error(getErrorMessage(ratesError ?? alertsError, "No se pudieron leer cotizaciones o alertas."));
   }
 
   const rates = (rateRows as Rate[] | null) ?? [];

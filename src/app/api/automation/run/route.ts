@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { processAlerts } from "@/lib/alert-processor";
+import { getErrorMessage } from "@/lib/error-message";
 import { updateRatesFromSources } from "@/lib/rate-updater";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudo ejecutar la automatización." },
+      { error: getErrorMessage(error, "No se pudo ejecutar la automatización.") },
       { status: 500 }
     );
   }

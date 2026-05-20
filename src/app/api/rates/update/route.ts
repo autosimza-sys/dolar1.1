@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getErrorMessage } from "@/lib/error-message";
 import { updateRatesFromSources } from "@/lib/rate-updater";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudieron actualizar las cotizaciones." },
+      { error: getErrorMessage(error, "No se pudieron actualizar las cotizaciones.") },
       { status: 500 }
     );
   }
