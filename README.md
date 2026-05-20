@@ -266,4 +266,3 @@ El SQL carga:
 - Tarjetas de educación financiera
 
 Si Supabase no está configurado todavía, la UI usa datos demo locales para poder revisar el diseño.
-Deploy nuevo
