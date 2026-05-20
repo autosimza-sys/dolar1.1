@@ -68,6 +68,9 @@ PREMIUM_MONTHLY_PRICE=3500
 ALERTS_CRON_SECRET=cambiar-este-secreto
 CRON_SECRET=cambiar-este-secreto
 RATES_UPDATE_SECRET=cambiar-este-secreto
+AUTOMATION_SECRET=cambiar-este-secreto
+RESEND_API_KEY=re_xxx
+ALERT_FROM_EMAIL=Dólar Mendoza <alertas@tudominio.com>
 ```
 
 ## 4. Desplegar en Vercel
@@ -155,28 +158,42 @@ En Vercel podés crear un Cron Job contra:
 /api/alerts/check?secret=TU_ALERTS_CRON_SECRET
 ```
 
-Cuando una alerta se dispara, se guarda en `alert_logs`. Ahí se conectan proveedores reales de email o WhatsApp si querés enviar mensajes salientes.
+Cuando una alerta se dispara, se guarda en `alert_logs`, se crea un registro en `notification_jobs` y se procesa el envio por email si `RESEND_API_KEY` esta configurada.
 
 ## 8. Actualización automática de cotizaciones
 
-La app incluye un actualizador automático:
+La app incluye un actualizador automatico:
 
 ```text
 /api/rates/update
 ```
+
+Y una ruta recomendada para produccion que hace el ciclo completo:
+
+```text
+/api/automation/run
+```
+
+Ese ciclo actualiza cotizaciones, guarda logs en `source_update_logs`, evalua alertas, crea trabajos en `notification_jobs` y procesa emails pendientes con reintentos.
 
 Fuentes incluidas:
 
 - DolarAPI para dólar oficial, blue, MEP y monedas oficiales.
 - BCRA API para tasa de plazo fijo 30 días y estimaciones mensuales.
 
-En Vercel ya queda configurado `vercel.json` con cron cada 30 minutos:
+En Vercel queda configurado `vercel.json` como respaldo cada 30 minutos:
 
 ```json
 {
-  "path": "/api/rates/update",
+  "path": "/api/automation/run",
   "schedule": "*/30 11-23 * * 1-5"
 }
+```
+
+Para actualizar cada 3 minutos, usar un cron externo como cron-job.org o Upstash QStash llamando:
+
+```text
+https://TU-DOMINIO/api/automation/run?secret=TU_SECRET
 ```
 
 Para que funcione en producción, cargá en Vercel:
@@ -186,12 +203,15 @@ SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
 CRON_SECRET=un-secreto-largo
 RATES_UPDATE_SECRET=un-secreto-largo
 ALERTS_CRON_SECRET=un-secreto-largo
+AUTOMATION_SECRET=un-secreto-largo
+RESEND_API_KEY=re_xxx
+ALERT_FROM_EMAIL=Dólar Mendoza <alertas@tudominio.com>
 ```
 
 Prueba manual:
 
 ```bash
-curl "https://TU-DOMINIO.vercel.app/api/rates/update?secret=TU_SECRET"
+curl "https://TU-DOMINIO/api/automation/run?secret=TU_SECRET"
 ```
 
 Notas:

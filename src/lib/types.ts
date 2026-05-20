@@ -86,3 +86,27 @@ export type FavoriteRate = {
   rate_code: string;
   created_at: string;
 };
+
+export type NotificationJob = {
+  id: string;
+  alert_id: string;
+  user_id: string;
+  channel: Channel;
+  recipient: string;
+  message: string;
+  status: "pending" | "processing" | "sent" | "failed" | "skipped";
+  attempts: number;
+  last_error: string | null;
+  created_at: string;
+  processed_at: string | null;
+};
+
+export type SourceUpdateLog = {
+  id: string;
+  source: string;
+  status: "success" | "partial" | "failed";
+  updated_codes: string[];
+  errors: string[];
+  started_at: string;
+  finished_at: string;
+};

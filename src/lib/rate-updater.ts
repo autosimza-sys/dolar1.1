@@ -93,6 +93,7 @@ export async function updateRatesFromSources() {
     throw new Error("Falta SUPABASE_SERVICE_ROLE_KEY para actualizar cotizaciones.");
   }
 
+  const startedAt = new Date().toISOString();
   const { data: currentRates, error: currentRatesError } = await supabase.from("rates").select("*");
   if (currentRatesError) throw currentRatesError;
 
@@ -177,11 +178,24 @@ export async function updateRatesFromSources() {
     if (error) throw error;
   }
 
+  const updatedCodes = updates.map((item) => item.code);
+  const status = errors.length && updatedCodes.length ? "partial" : errors.length ? "failed" : "success";
+  const finishedAt = new Date().toISOString();
+
+  await supabase.from("source_update_logs").insert({
+    source: "rates:update",
+    status,
+    updated_codes: updatedCodes,
+    errors,
+    started_at: startedAt,
+    finished_at: finishedAt
+  });
+
   await supabase.from("admin_settings").upsert(
     {
       key: "last_rate_update",
       value: {
-        updated_at: new Date().toISOString(),
+        updated_at: finishedAt,
         updated_count: updates.length,
         errors
       }
@@ -190,7 +204,7 @@ export async function updateRatesFromSources() {
   );
 
   return {
-    updated: updates.map((item) => item.code),
+    updated: updatedCodes,
     errors
   };
 }

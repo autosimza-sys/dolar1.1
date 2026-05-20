@@ -6,7 +6,7 @@ import { AuthForm } from "@/components/AuthForm";
 import { demoRates } from "@/lib/demo-data";
 import { formatDateTime, formatMoney, formatPercent } from "@/lib/format";
 import { getAdminEmails, useAccount } from "@/lib/hooks";
-import type { EducationCard, Profile, Rate, Subscription, UserAlert } from "@/lib/types";
+import type { EducationCard, NotificationJob, Profile, Rate, SourceUpdateLog, Subscription, UserAlert } from "@/lib/types";
 
 type AdminData = {
   rates: Rate[];
@@ -14,6 +14,8 @@ type AdminData = {
   alerts: UserAlert[];
   subscriptions: Subscription[];
   educationCards: EducationCard[];
+  notificationJobs: NotificationJob[];
+  sourceUpdateLogs: SourceUpdateLog[];
 };
 
 const emptyAdminData: AdminData = {
@@ -21,7 +23,9 @@ const emptyAdminData: AdminData = {
   profiles: [],
   alerts: [],
   subscriptions: [],
-  educationCards: []
+  educationCards: [],
+  notificationJobs: [],
+  sourceUpdateLogs: []
 };
 
 function asNumber(value: FormDataEntryValue | null) {
@@ -119,15 +123,24 @@ export function AdminScreen() {
     }
 
     setIsLoading(true);
-    const [rates, profiles, alerts, subscriptions, educationCards] = await Promise.all([
+    const [rates, profiles, alerts, subscriptions, educationCards, notificationJobs, sourceUpdateLogs] = await Promise.all([
       account.supabase.from("rates").select("*").order("type", { ascending: true }).order("name", { ascending: true }),
       account.supabase.from("profiles").select("*").order("created_at", { ascending: false }).limit(100),
       account.supabase.from("alerts").select("*").order("created_at", { ascending: false }).limit(200),
       account.supabase.from("subscriptions").select("*").order("started_at", { ascending: false }).limit(100),
-      account.supabase.from("education_cards").select("*").order("created_at", { ascending: false }).limit(100)
+      account.supabase.from("education_cards").select("*").order("created_at", { ascending: false }).limit(100),
+      account.supabase.from("notification_jobs").select("*").order("created_at", { ascending: false }).limit(20),
+      account.supabase.from("source_update_logs").select("*").order("finished_at", { ascending: false }).limit(10)
     ]);
 
-    const firstError = rates.error ?? profiles.error ?? alerts.error ?? subscriptions.error ?? educationCards.error;
+    const firstError =
+      rates.error ??
+      profiles.error ??
+      alerts.error ??
+      subscriptions.error ??
+      educationCards.error ??
+      notificationJobs.error ??
+      sourceUpdateLogs.error;
     if (firstError) {
       setMessage(firstError.message);
     }
@@ -137,7 +150,9 @@ export function AdminScreen() {
       profiles: (profiles.data as Profile[] | null) ?? [],
       alerts: (alerts.data as UserAlert[] | null) ?? [],
       subscriptions: (subscriptions.data as Subscription[] | null) ?? [],
-      educationCards: (educationCards.data as EducationCard[] | null) ?? []
+      educationCards: (educationCards.data as EducationCard[] | null) ?? [],
+      notificationJobs: (notificationJobs.data as NotificationJob[] | null) ?? [],
+      sourceUpdateLogs: (sourceUpdateLogs.data as SourceUpdateLog[] | null) ?? []
     });
     setIsLoading(false);
   }, [account.supabase, account.user, isAdmin]);
@@ -413,6 +428,58 @@ export function AdminScreen() {
                 </div>
               </article>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-two-columns">
+        <div>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Automatización</p>
+              <h2>Fuentes</h2>
+            </div>
+          </div>
+          <div className="admin-list">
+            {data.sourceUpdateLogs.map((log) => (
+              <article key={log.id}>
+                <Check size={18} />
+                <div>
+                  <strong>
+                    {log.status} · {log.updated_codes.length} datos
+                  </strong>
+                  <span>
+                    {formatDateTime(log.finished_at)} · {log.errors.length ? `${log.errors.length} errores` : "sin errores"}
+                  </span>
+                </div>
+              </article>
+            ))}
+            {!data.sourceUpdateLogs.length ? <div className="empty-state">Sin actualizaciones automáticas todavía.</div> : null}
+          </div>
+        </div>
+
+        <div>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Notificaciones</p>
+              <h2>Últimos envíos</h2>
+            </div>
+          </div>
+          <div className="admin-list">
+            {data.notificationJobs.map((job) => (
+              <article key={job.id}>
+                <Bell size={18} />
+                <div>
+                  <strong>
+                    {job.channel} · {job.status}
+                  </strong>
+                  <span>
+                    {formatDateTime(job.created_at)} · intentos {job.attempts}
+                  </span>
+                </div>
+              </article>
+            ))}
+            {!data.notificationJobs.length ? <div className="empty-state">Sin trabajos de notificación todavía.</div> : null}
           </div>
         </div>
       </section>

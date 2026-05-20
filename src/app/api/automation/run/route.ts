@@ -1,10 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { processAlerts } from "@/lib/alert-processor";
+import { updateRatesFromSources } from "@/lib/rate-updater";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function isAuthorized(request: NextRequest) {
-  const secrets = [process.env.CRON_SECRET, process.env.ALERTS_CRON_SECRET].filter(Boolean);
+  const secrets = [
+    process.env.AUTOMATION_SECRET,
+    process.env.CRON_SECRET,
+    process.env.RATES_UPDATE_SECRET,
+    process.env.ALERTS_CRON_SECRET
+  ].filter(Boolean);
   if (!secrets.length) return true;
 
   const bearer = request.headers.get("authorization")?.replace("Bearer ", "");
@@ -18,16 +25,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await processAlerts();
+    const rates = await updateRatesFromSources();
+    const alerts = await processAlerts();
+
     return NextResponse.json({
       ok: true,
-      checked: result.checked,
-      queued: result.queued,
-      processed: result.processed
+      rates,
+      alerts
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudieron procesar las alertas." },
+      { error: error instanceof Error ? error.message : "No se pudo ejecutar la automatización." },
       { status: 500 }
     );
   }

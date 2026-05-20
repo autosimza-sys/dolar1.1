@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/rates/update",
+      "path": "/api/automation/run",
       "schedule": "*/30 11-23 * * 1-5"
     },
     {
