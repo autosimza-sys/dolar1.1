@@ -23,6 +23,10 @@ type BcraResponse = {
 
 type RateUpdate = {
   code: string;
+  name: string;
+  country: string;
+  flag: string;
+  type: string;
   buy_price: number | null;
   sell_price: number | null;
   variation: number;
@@ -31,9 +35,28 @@ type RateUpdate = {
   updated_at: string;
 };
 
+type RateMetadata = {
+  name: string;
+  country: string;
+  flag: string;
+  type: string;
+};
+
 const DOLAR_API = "https://dolarapi.com/v1";
 const BCRA_API = "https://api.bcra.gob.ar/estadisticas/v4.0";
 const BCRA_FIXED_TERM_30_ID = 9823;
+
+const RATE_METADATA: Record<string, RateMetadata> = {
+  USD_OFICIAL: { name: "Dolar Oficial", country: "Argentina", flag: "🇦🇷🇺🇸", type: "main" },
+  USD_BLUE: { name: "Dolar Blue", country: "Argentina", flag: "🇦🇷🇺🇸", type: "main" },
+  USD_MEP: { name: "Dolar Bolsa / MEP", country: "Argentina", flag: "🇦🇷🇺🇸", type: "main" },
+  CLP_OFICIAL: { name: "Peso chileno oficial", country: "Chile", flag: "🇨🇱", type: "travel" },
+  BRL_OFICIAL: { name: "Real oficial", country: "Brasil", flag: "🇧🇷", type: "travel" },
+  EUR_OFICIAL: { name: "Euro oficial", country: "Europa", flag: "🇪🇺", type: "travel" },
+  BCRA_RATE: { name: "Tasa BCRA", country: "Argentina", flag: "🇦🇷", type: "argentina_today" },
+  FIXED_TERM_30: { name: "Plazo fijo promedio 30 dias", country: "Argentina", flag: "🇦🇷", type: "argentina_today" },
+  MONTHLY_YIELD: { name: "Rendimiento mensual estimado", country: "Argentina", flag: "🇦🇷", type: "argentina_today" }
+};
 
 function variation(newValue: number | null, oldValue: number | null | undefined) {
   if (!newValue || !oldValue || oldValue <= 0) return 0;
@@ -52,15 +75,25 @@ function pickCurrency(rows: DolarApiRate[], moneda: string) {
   return rows.find((row) => row.moneda.toUpperCase() === moneda.toUpperCase() && row.casa === "oficial");
 }
 
-function makeUpdate(code: string, row: DolarApiRate, oldRates: Map<string, Rate>, source: string): RateUpdate {
-  const oldRate = oldRates.get(code);
+function metadataFor(code: string): RateMetadata {
+  return RATE_METADATA[code] ?? { name: code, country: "Argentina", flag: "🇦🇷", type: "other" };
+}
+
+function makeUpdate(
+  mapping: { code: string; source: string },
+  row: DolarApiRate,
+  oldRates: Map<string, Rate>
+): RateUpdate {
+  const oldRate = oldRates.get(mapping.code);
+  const metadata = metadataFor(mapping.code);
 
   return {
-    code,
+    code: mapping.code,
+    ...metadata,
     buy_price: row.compra,
     sell_price: row.venta,
     variation: variation(row.venta, oldRate?.sell_price),
-    source,
+    source: mapping.source,
     is_visible: true,
     updated_at: row.fechaActualizacion || new Date().toISOString()
   };
@@ -112,7 +145,7 @@ export async function updateRatesFromSources() {
 
     for (const mapping of mappings) {
       const row = pickDolarApi(dolarRows, mapping.casa);
-      if (row) updates.push(makeUpdate(mapping.code, row, oldRates, mapping.source));
+      if (row) updates.push(makeUpdate(mapping, row, oldRates));
     }
   } catch (error) {
     errors.push(error instanceof Error ? error.message : "No se pudo leer DolarAPI dólares.");
@@ -128,7 +161,7 @@ export async function updateRatesFromSources() {
 
     for (const mapping of mappings) {
       const row = pickCurrency(currencyRows, mapping.moneda);
-      if (row) updates.push(makeUpdate(mapping.code, row, oldRates, mapping.source));
+      if (row) updates.push(makeUpdate(mapping, row, oldRates));
     }
   } catch (error) {
     errors.push(error instanceof Error ? error.message : "No se pudo leer DolarAPI monedas.");
@@ -144,6 +177,7 @@ export async function updateRatesFromSources() {
 
       updates.push({
         code: "BCRA_RATE",
+        ...metadataFor("BCRA_RATE"),
         buy_price: null,
         sell_price: annualRate,
         variation: variation(annualRate, oldRates.get("BCRA_RATE")?.sell_price),
@@ -153,6 +187,7 @@ export async function updateRatesFromSources() {
       });
       updates.push({
         code: "FIXED_TERM_30",
+        ...metadataFor("FIXED_TERM_30"),
         buy_price: null,
         sell_price: simpleMonthly,
         variation: variation(simpleMonthly, oldRates.get("FIXED_TERM_30")?.sell_price),
@@ -162,6 +197,7 @@ export async function updateRatesFromSources() {
       });
       updates.push({
         code: "MONTHLY_YIELD",
+        ...metadataFor("MONTHLY_YIELD"),
         buy_price: null,
         sell_price: effectiveMonthly,
         variation: variation(effectiveMonthly, oldRates.get("MONTHLY_YIELD")?.sell_price),
@@ -193,7 +229,7 @@ export async function updateRatesFromSources() {
   });
 
   if (sourceLogError) {
-    throw new Error(getErrorMessage(sourceLogError, "No se pudo guardar el log de fuentes."));
+    errors.push(getErrorMessage(sourceLogError, "No se pudo guardar el log de fuentes."));
   }
 
   const { error: settingsError } = await supabase.from("admin_settings").upsert(
@@ -209,7 +245,7 @@ export async function updateRatesFromSources() {
   );
 
   if (settingsError) {
-    throw new Error(getErrorMessage(settingsError, "No se pudo guardar last_rate_update."));
+    errors.push(getErrorMessage(settingsError, "No se pudo guardar last_rate_update."));
   }
 
   return {
