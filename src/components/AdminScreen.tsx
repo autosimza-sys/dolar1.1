@@ -1,12 +1,23 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Bell, Check, Crown, Eye, EyeOff, Save, ShieldCheck, Users } from "lucide-react";
+import { AlertTriangle, Bell, Check, Crown, Database, Eye, EyeOff, Save, ShieldCheck, Users } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { demoRates } from "@/lib/demo-data";
 import { formatDateTime, formatMoney, formatPercent } from "@/lib/format";
 import { getAdminEmails, useAccount } from "@/lib/hooks";
-import type { EducationCard, NotificationJob, Profile, Rate, SourceUpdateLog, Subscription, UserAlert } from "@/lib/types";
+import type {
+  CommunityReport,
+  EducationCard,
+  NotificationJob,
+  Profile,
+  Rate,
+  RateSource,
+  RateSourceReading,
+  SourceUpdateLog,
+  Subscription,
+  UserAlert
+} from "@/lib/types";
 
 type AdminData = {
   rates: Rate[];
@@ -16,6 +27,16 @@ type AdminData = {
   educationCards: EducationCard[];
   notificationJobs: NotificationJob[];
   sourceUpdateLogs: SourceUpdateLog[];
+  rateSources: RateSource[];
+  sourceReadings: RateSourceReading[];
+  communityReports: CommunityReport[];
+  blueMendozaManual: {
+    enabled?: boolean;
+    buy_price?: number | null;
+    sell_price?: number | null;
+    note?: string;
+  } | null;
+  communityFiltersEnabled: boolean;
 };
 
 const emptyAdminData: AdminData = {
@@ -25,7 +46,12 @@ const emptyAdminData: AdminData = {
   subscriptions: [],
   educationCards: [],
   notificationJobs: [],
-  sourceUpdateLogs: []
+  sourceUpdateLogs: [],
+  rateSources: [],
+  sourceReadings: [],
+  communityReports: [],
+  blueMendozaManual: null,
+  communityFiltersEnabled: true
 };
 
 function asNumber(value: FormDataEntryValue | null) {
@@ -123,14 +149,32 @@ export function AdminScreen() {
     }
 
     setIsLoading(true);
-    const [rates, profiles, alerts, subscriptions, educationCards, notificationJobs, sourceUpdateLogs] = await Promise.all([
+    const [
+      rates,
+      profiles,
+      alerts,
+      subscriptions,
+      educationCards,
+      notificationJobs,
+      sourceUpdateLogs,
+      rateSources,
+      sourceReadings,
+      communityReports,
+      blueMendozaManual,
+      communityFilters
+    ] = await Promise.all([
       account.supabase.from("rates").select("*").order("type", { ascending: true }).order("name", { ascending: true }),
       account.supabase.from("profiles").select("*").order("created_at", { ascending: false }).limit(100),
       account.supabase.from("alerts").select("*").order("created_at", { ascending: false }).limit(200),
       account.supabase.from("subscriptions").select("*").order("started_at", { ascending: false }).limit(100),
       account.supabase.from("education_cards").select("*").order("created_at", { ascending: false }).limit(100),
       account.supabase.from("notification_jobs").select("*").order("created_at", { ascending: false }).limit(20),
-      account.supabase.from("source_update_logs").select("*").order("finished_at", { ascending: false }).limit(10)
+      account.supabase.from("source_update_logs").select("*").order("finished_at", { ascending: false }).limit(10),
+      account.supabase.from("rate_sources").select("*").order("priority", { ascending: true }),
+      account.supabase.from("rate_source_readings").select("*").order("fetched_at", { ascending: false }).limit(40),
+      account.supabase.from("community_reports").select("*").order("created_at", { ascending: false }).limit(80),
+      account.supabase.from("admin_settings").select("value").eq("key", "blue_mendoza_manual").maybeSingle(),
+      account.supabase.from("admin_settings").select("value").eq("key", "community_filters_enabled").maybeSingle()
     ]);
 
     const firstError =
@@ -140,7 +184,12 @@ export function AdminScreen() {
       subscriptions.error ??
       educationCards.error ??
       notificationJobs.error ??
-      sourceUpdateLogs.error;
+      sourceUpdateLogs.error ??
+      rateSources.error ??
+      sourceReadings.error ??
+      communityReports.error ??
+      blueMendozaManual.error ??
+      communityFilters.error;
     if (firstError) {
       setMessage(firstError.message);
     }
@@ -152,7 +201,13 @@ export function AdminScreen() {
       subscriptions: (subscriptions.data as Subscription[] | null) ?? [],
       educationCards: (educationCards.data as EducationCard[] | null) ?? [],
       notificationJobs: (notificationJobs.data as NotificationJob[] | null) ?? [],
-      sourceUpdateLogs: (sourceUpdateLogs.data as SourceUpdateLog[] | null) ?? []
+      sourceUpdateLogs: (sourceUpdateLogs.data as SourceUpdateLog[] | null) ?? [],
+      rateSources: (rateSources.data as RateSource[] | null) ?? [],
+      sourceReadings: (sourceReadings.data as RateSourceReading[] | null) ?? [],
+      communityReports: (communityReports.data as CommunityReport[] | null) ?? [],
+      blueMendozaManual:
+        (blueMendozaManual.data?.value as AdminData["blueMendozaManual"] | null | undefined) ?? null,
+      communityFiltersEnabled: communityFilters.data?.value !== false
     });
     setIsLoading(false);
   }, [account.supabase, account.user, isAdmin]);
@@ -191,6 +246,65 @@ export function AdminScreen() {
       .eq("code", rate.code);
 
     setMessage(error ? error.message : `${rate.name} se ocultó por falta de fuente confiable.`);
+    await reload();
+  }
+
+  async function toggleRateSource(source: RateSource) {
+    if (!account.supabase) return;
+
+    const { error } = await account.supabase.from("rate_sources").update({ enabled: !source.enabled }).eq("id", source.id);
+    setMessage(error ? error.message : `${source.name} ${source.enabled ? "desactivada" : "activada"}.`);
+    await reload();
+  }
+
+  async function saveBlueMendozaManual(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!account.supabase) return;
+
+    const formData = new FormData(event.currentTarget);
+    const payload = {
+      key: "blue_mendoza_manual",
+      value: {
+        enabled: formData.get("enabled") === "on",
+        buy_price: asNumber(formData.get("buy_price")),
+        sell_price: asNumber(formData.get("sell_price")),
+        note: String(formData.get("note") ?? "")
+      }
+    };
+
+    const { error } = await account.supabase.from("admin_settings").upsert(payload, { onConflict: "key" });
+    setMessage(error ? error.message : "Blue Mendoza manual actualizado.");
+    await reload();
+  }
+
+  async function toggleCommunityFilters() {
+    if (!account.supabase) return;
+
+    const { error } = await account.supabase.from("admin_settings").upsert(
+      {
+        key: "community_filters_enabled",
+        value: !data.communityFiltersEnabled
+      },
+      { onConflict: "key" }
+    );
+
+    setMessage(error ? error.message : "Filtro de comunidad actualizado.");
+    await reload();
+  }
+
+  async function moderateCommunityReport(report: CommunityReport, status: CommunityReport["status"]) {
+    if (!account.supabase) return;
+
+    const { error } = await account.supabase
+      .from("community_reports")
+      .update({
+        status,
+        include_in_stats: status === "approved",
+        moderation_reason: status === "approved" ? null : "Moderado por admin"
+      })
+      .eq("id", report.id);
+
+    setMessage(error ? error.message : "Reporte comunitario actualizado.");
     await reload();
   }
 
@@ -284,6 +398,130 @@ export function AdminScreen() {
           <strong>{unreliableSources}</strong>
           <span>Sin fuente</span>
         </article>
+      </section>
+
+      <section className="admin-two-columns">
+        <div>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Blue Mendoza</p>
+              <h2>Manual / automático</h2>
+            </div>
+          </div>
+          <form className="admin-create" onSubmit={saveBlueMendozaManual}>
+            <label className="toggle-line">
+              <input defaultChecked={Boolean(data.blueMendozaManual?.enabled)} name="enabled" type="checkbox" />
+              Usar valor manual
+            </label>
+            <div className="admin-fields">
+              <label className="field field--tight">
+                <span>Compra manual</span>
+                <input defaultValue={data.blueMendozaManual?.buy_price ?? ""} name="buy_price" step="0.01" type="number" />
+              </label>
+              <label className="field field--tight">
+                <span>Venta manual</span>
+                <input defaultValue={data.blueMendozaManual?.sell_price ?? ""} name="sell_price" step="0.01" type="number" />
+              </label>
+              <label className="field field--tight">
+                <span>Nota interna</span>
+                <input defaultValue={data.blueMendozaManual?.note ?? ""} name="note" />
+              </label>
+            </div>
+            <button className="button button--full" type="submit">
+              <Save size={17} />
+              Guardar Blue Mendoza
+            </button>
+          </form>
+        </div>
+
+        <div>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Fuentes configurables</p>
+              <h2>Activar y auditar</h2>
+            </div>
+          </div>
+          <div className="admin-list">
+            {data.rateSources.slice(0, 10).map((source) => (
+              <article key={source.id}>
+                <Database size={18} />
+                <div>
+                  <strong>{source.name}</strong>
+                  <span>
+                    {source.provider} · prioridad {source.priority} · {source.enabled ? "activa" : "apagada"}
+                  </span>
+                </div>
+                <button className="button button--small button--ghost" type="button" onClick={() => toggleRateSource(source)}>
+                  {source.enabled ? "Apagar" : "Activar"}
+                </button>
+              </article>
+            ))}
+            {!data.rateSources.length ? <div className="empty-state">Ejecutá el SQL nuevo para cargar fuentes configurables.</div> : null}
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-two-columns">
+        <div>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Validación automática</p>
+              <h2>Lecturas recientes</h2>
+            </div>
+          </div>
+          <div className="admin-list">
+            {data.sourceReadings.slice(0, 16).map((reading) => (
+              <article key={reading.id}>
+                <AlertTriangle size={18} />
+                <div>
+                  <strong>
+                    {reading.rate_code} · {reading.status}
+                  </strong>
+                  <span>
+                    {reading.source_name} · {reading.reason ?? "coherente"} · {formatDateTime(reading.fetched_at)}
+                  </span>
+                </div>
+              </article>
+            ))}
+            {!data.sourceReadings.length ? <div className="empty-state">Sin lecturas internas todavía.</div> : null}
+          </div>
+        </div>
+
+        <div>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Comunidad</p>
+              <h2>Moderación</h2>
+            </div>
+            <button className="button button--small button--ghost" type="button" onClick={toggleCommunityFilters}>
+              Filtro {data.communityFiltersEnabled ? "ON" : "OFF"}
+            </button>
+          </div>
+          <div className="admin-list">
+            {data.communityReports.slice(0, 16).map((report) => (
+              <article key={report.id}>
+                <Users size={18} />
+                <div>
+                  <strong>
+                    {report.operation_type === "buy" ? "Compra" : "Venta"} {report.currency} {report.amount} a ${report.rate}
+                  </strong>
+                  <span>
+                    {report.department} · {report.status} · {report.moderation_reason ?? "sin observación"}
+                  </span>
+                </div>
+                <div className="admin-actions-inline">
+                  <button className="button button--small button--ghost" type="button" onClick={() => moderateCommunityReport(report, "approved")}>
+                    OK
+                  </button>
+                  <button className="button button--small button--danger" type="button" onClick={() => moderateCommunityReport(report, "rejected")}>
+                    Ocultar
+                  </button>
+                </div>
+              </article>
+            ))}
+            {!data.communityReports.length ? <div className="empty-state">Sin reportes comunitarios.</div> : null}
+          </div>
+        </div>
       </section>
 
       <section className="section">

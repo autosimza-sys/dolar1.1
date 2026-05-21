@@ -30,6 +30,19 @@ export const demoRates: Rate[] = [
     updated_at: now
   },
   {
+    code: "USD_BLUE_MENDOZA",
+    name: "Dolar Blue Mendoza",
+    country: "Mendoza",
+    flag: "ðŸ‡¦ðŸ‡·ðŸ‡ºðŸ‡¸",
+    type: "main",
+    buy_price: 1177,
+    sell_price: 1183,
+    variation: 0.9,
+    source: "Promedio demo",
+    is_visible: true,
+    updated_at: now
+  },
+  {
     code: "USD_MEP",
     name: "Dólar Bolsa / MEP",
     country: "Argentina / Estados Unidos",
@@ -39,6 +52,19 @@ export const demoRates: Rate[] = [
     sell_price: 1175,
     variation: -0.2,
     source: "Demo manual",
+    is_visible: true,
+    updated_at: now
+  },
+  {
+    code: "USD_CCL",
+    name: "Dolar CCL",
+    country: "Argentina / Estados Unidos",
+    flag: "ðŸ‡¦ðŸ‡·ðŸ‡ºðŸ‡¸",
+    type: "main",
+    buy_price: 1168,
+    sell_price: 1184,
+    variation: -0.1,
+    source: "Promedio demo",
     is_visible: true,
     updated_at: now
   },

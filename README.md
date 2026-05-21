@@ -25,8 +25,9 @@ npm run build
 1. Crear un proyecto nuevo en Supabase.
 2. Ir a `SQL Editor`.
 3. Ejecutar completo el archivo [`supabase/schema.sql`](./supabase/schema.sql).
-4. En `Authentication > Providers`, activar Email.
-5. En `Authentication > URL Configuration`, cargar:
+4. Ejecutar también [`supabase/financial_upgrade.sql`](./supabase/financial_upgrade.sql) para agregar fuentes, historial y comunidad. No borra datos si el proyecto ya existe.
+5. En `Authentication > Providers`, activar Email.
+6. En `Authentication > URL Configuration`, cargar:
    - Site URL: `http://localhost:3000` en local.
    - En producción: la URL final de Vercel.
 
@@ -42,6 +43,10 @@ El SQL crea:
 - `subscriptions`
 - `admin_settings`
 - `favorite_rates`
+- `rate_sources`
+- `rate_source_readings`
+- `rate_history`
+- `community_reports`
 
 También activa Row Level Security, carga datos demo y limita usuarios gratis a 1 alerta activa.
 
@@ -176,19 +181,14 @@ Y una ruta recomendada para produccion que hace el ciclo completo:
 
 Ese ciclo actualiza cotizaciones, guarda logs en `source_update_logs`, evalua alertas, crea trabajos en `notification_jobs` y procesa emails pendientes con reintentos.
 
-Fuentes incluidas:
+El motor financiero no publica una fuente cruda: construye valores promedio de referencia, guarda lecturas internas, descarta outliers y deja logs para admin.
+
+Fuentes incluidas y configurables:
 
 - DolarAPI para dólar oficial, blue, MEP y monedas oficiales.
+- ArgentinaDatos y RatesArg como fuentes alternativas tolerantes a fallos.
 - BCRA API para tasa de plazo fijo 30 días y estimaciones mensuales.
-
-En Vercel queda configurado `vercel.json` como respaldo cada 30 minutos:
-
-```json
-{
-  "path": "/api/automation/run",
-  "schedule": "*/30 11-23 * * 1-5"
-}
-```
+- Comunidad anónima de Mendoza como referencia estadística para Blue Mendoza.
 
 Para actualizar cada 3 minutos, usar un cron externo como cron-job.org o Upstash QStash llamando:
 
@@ -216,8 +216,31 @@ curl "https://TU-DOMINIO/api/automation/run?secret=TU_SECRET"
 
 Notas:
 
-- Los blue de real, euro y peso chileno quedan para carga manual si no hay fuente confiable.
+- Los mercados oficiales promedian compra real y venta real.
+- Los mercados blue/paralelos usan promedio validado y criterio propio: compra = promedio - spread, venta = promedio + spread.
+- Blue Mendoza respeta prioridad: manual admin, automático comunitario/regional, fallback nacional.
 - Si una cotización no tiene fuente confiable, el admin puede marcarla como `Sin fuente confiable` y ocultarla de la home.
+
+## 8.1 Comunidad financiera mendocina
+
+La home incluye una sección anónima para informar operaciones reales ya realizadas. No requiere registro.
+
+Campos:
+
+- compra o venta
+- moneda
+- monto
+- cotización
+- departamento
+- comentario opcional
+
+El backend bloquea datos de contacto, WhatsApp, Telegram, Instagram, emails, alias, CBU/CVU, URLs y ofertas directas de compra/venta. Si una operación está muy fuera de rango, se guarda como sospechosa y no entra en estadísticas.
+
+Texto legal visible:
+
+```text
+Los valores publicados por usuarios corresponden a operaciones informadas de manera independiente y no representan una cotización oficial ni fijan precios de mercado.
+```
 
 ## 9. Cargar cotizaciones
 
@@ -229,6 +252,11 @@ Desde `/admin`:
 - Marcar fuente como sin fuente confiable.
 - Actualizar tasa BCRA.
 - Actualizar plazo fijo.
+- Activar/desactivar fuentes de datos.
+- Ver lecturas aceptadas/rechazadas.
+- Activar/desactivar Blue Mendoza manual.
+- Moderar reportes comunitarios.
+- Activar/desactivar filtros de comunidad.
 
 Regla clave: si una moneda queda con `is_visible = false`, no aparece en la home.
 
@@ -245,9 +273,12 @@ src/app
   api/mercadopago/create-subscription/route.ts
   api/mercadopago/webhook/route.ts
   api/alerts/check/route.ts
+  api/automation/run/route.ts
+  api/community/reports/route.ts
 src/components
 src/lib
 supabase/schema.sql
+supabase/financial_upgrade.sql
 ```
 
 ## 11. Datos demo
@@ -256,7 +287,9 @@ El SQL carga:
 
 - Dólar Oficial
 - Dólar Blue
+- Dólar Blue Mendoza
 - Dólar Bolsa / MEP
+- Dólar CCL
 - Peso chileno oficial y blue
 - Real oficial y blue
 - Euro oficial y blue

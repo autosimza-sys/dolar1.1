@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Bell, ChevronRight, CircleDollarSign, Sparkles } from "lucide-react";
+import { CommunityReports } from "@/components/CommunityReports";
 import { RateCard } from "@/components/RateCard";
 import { INDICATOR_CODES, MAIN_RATE_CODES, TRAVEL_RATE_CODES } from "@/lib/constants";
 import { formatDateTime, formatPercent, shortNumber } from "@/lib/format";
@@ -20,7 +21,7 @@ function ArgentinaToday({ rates }: { rates: Rate[] }) {
   }, null);
 
   return (
-    <section className="section">
+    <section className="section argentina-section">
       <div className="section-heading">
         <div>
           <p className="eyebrow">Argentina hoy</p>
@@ -65,7 +66,7 @@ export function HomeScreen() {
   const travelRates = pickRates(rates, TRAVEL_RATE_CODES);
 
   return (
-    <div className="screen">
+    <div className="screen screen--home">
       <section className="hero">
         <div className="hero__badge">
           <Sparkles size={16} />
@@ -87,7 +88,7 @@ export function HomeScreen() {
       {error ? <p className="notice">Mostrando datos demo hasta conectar Supabase.</p> : null}
       {isLoading ? <p className="loading-line">Cargando cotizaciones...</p> : null}
 
-      <section className="section">
+      <section className="section section--main-rates">
         <div className="section-heading">
           <div>
             <p className="eyebrow">Principales</p>
@@ -104,7 +105,7 @@ export function HomeScreen() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section section--travel-rates">
         <div className="section-heading">
           <div>
             <p className="eyebrow">Frontera y viajes</p>
@@ -119,6 +120,8 @@ export function HomeScreen() {
       </section>
 
       <ArgentinaToday rates={rates} />
+
+      <CommunityReports />
 
       <section className="premium-strip">
         <p>No pagás por ver números. Pagás por enterarte antes.</p>

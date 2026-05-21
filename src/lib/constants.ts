@@ -2,7 +2,7 @@ import type { AlertCondition, Channel } from "@/lib/types";
 
 export const APP_NAME = "Dólar Mendoza";
 
-export const MAIN_RATE_CODES = ["USD_OFICIAL", "USD_BLUE", "USD_MEP"];
+export const MAIN_RATE_CODES = ["USD_OFICIAL", "USD_BLUE", "USD_BLUE_MENDOZA", "USD_MEP", "USD_CCL"];
 
 export const TRAVEL_RATE_CODES = [
   "CLP_OFICIAL",
