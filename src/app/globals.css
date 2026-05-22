@@ -300,6 +300,29 @@ button:disabled {
   width: 48px;
 }
 
+.rate-card__flag--compact {
+  height: 42px;
+  width: 42px;
+}
+
+.flag-stack {
+  overflow: hidden;
+  position: relative;
+}
+
+.flag-stack img {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  display: block;
+  height: 25px;
+  object-fit: cover;
+  width: 25px;
+}
+
+.flag-stack img + img {
+  margin-left: -8px;
+}
+
 .rate-card h3,
 .metric-card strong,
 .education-card h2,
@@ -605,10 +628,30 @@ input:focus {
 .option-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 410px;
+  gap: 7px;
+  max-height: 278px;
   overflow: auto;
-  padding-right: 2px;
+  padding-right: 4px;
+  scrollbar-color: rgba(0, 200, 83, 0.42) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
+}
+
+.option-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.option-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 999px;
+}
+
+.option-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 200, 83, 0.38);
+  border-radius: 999px;
+}
+
+.option-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 200, 83, 0.62);
 }
 
 .option-button,
@@ -626,18 +669,37 @@ input:focus {
   align-items: flex-start;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px;
+  gap: 2px;
+  min-height: 50px;
+  padding: 10px 11px;
   text-align: left;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.option-button:hover {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
 }
 
 .option-button span {
+  font-size: 13px;
   font-weight: 850;
+  line-height: 1.18;
 }
 
 .option-button small {
   color: var(--gray-text);
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.25;
+  margin-top: 1px;
+  opacity: 0.48;
+  transition:
+    opacity 160ms ease,
+    max-height 160ms ease;
 }
 
 .option-button.is-selected,
@@ -646,6 +708,15 @@ input:focus {
 .category-scroll button.is-active {
   border-color: var(--green);
   background: rgba(0, 200, 83, 0.12);
+}
+
+.option-button.is-selected {
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.option-button.is-selected small,
+.option-button:hover small {
+  opacity: 0.78;
 }
 
 .target-input {
@@ -669,6 +740,13 @@ input:focus {
   color: var(--green);
   font-style: normal;
   font-weight: 900;
+}
+
+.step-helper {
+  color: rgba(163, 163, 163, 0.72);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: -4px 0 0;
 }
 
 .channel-grid {
@@ -1033,22 +1111,84 @@ input:focus {
 .favorite-button {
   align-items: flex-start;
   display: grid;
-  gap: 5px;
-  min-height: 116px;
-  padding: 12px;
+  gap: 12px;
+  min-height: 190px;
+  padding: 14px;
   text-align: left;
 }
 
-.favorite-button svg {
+.favorite-button > svg,
+.favorite-button__top svg {
   color: var(--yellow);
 }
 
+.favorite-button__top {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  width: 100%;
+}
+
+.favorite-button__top > span:not(.rate-card__flag) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
 .favorite-button strong {
+  display: block;
   line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .favorite-button small {
   color: var(--gray-text);
+}
+
+.favorite-quotes {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+
+.favorite-quotes > span {
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.favorite-quotes em {
+  color: var(--gray-text);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.favorite-quotes b {
+  color: var(--white);
+  font-size: 22px;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.spread-line {
+  align-items: center;
+  background: rgba(0, 200, 83, 0.1);
+  border: 1px solid rgba(0, 200, 83, 0.18);
+  border-radius: 999px;
+  color: var(--green) !important;
+  display: inline-flex;
+  font-size: 12px !important;
+  font-weight: 900;
+  min-height: 28px;
+  padding: 6px 9px;
 }
 
 .timeline {
@@ -1234,6 +1374,10 @@ input:focus {
   .community-form .admin-fields {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .favorites-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 980px) {
@@ -1280,5 +1424,53 @@ input:focus {
 
   .admin-rate-card {
     padding: 16px;
+  }
+
+  .builder {
+    align-items: start;
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+  }
+
+  .builder-step--conditions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .builder-step--conditions .option-list {
+    max-height: 318px;
+  }
+
+  .builder-step--inline {
+    grid-column: 1;
+  }
+
+  .builder-step--channel,
+  .builder > .notice,
+  .builder > .button {
+    grid-column: 1 / -1;
+  }
+
+  .option-list {
+    gap: 6px;
+  }
+
+  .option-button {
+    min-height: 46px;
+    padding: 9px 11px;
+  }
+
+  .option-button small {
+    max-height: 0;
+    overflow: hidden;
+  }
+
+  .option-button.is-selected small,
+  .option-button:hover small {
+    max-height: 44px;
+  }
+
+  .favorites-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

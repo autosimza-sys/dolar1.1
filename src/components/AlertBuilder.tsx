@@ -89,7 +89,7 @@ export function AlertBuilder() {
       </section>
 
       <form className="builder" onSubmit={handleSave}>
-        <div className="builder-step">
+        <div className="builder-step builder-step--conditions">
           <div className="step-title">
             <span>1</span>
             <strong>Elegí moneda o indicador</strong>
@@ -103,7 +103,7 @@ export function AlertBuilder() {
           </select>
         </div>
 
-        <div className="builder-step">
+        <div className="builder-step builder-step--channel">
           <div className="step-title">
             <span>2</span>
             <strong>Elegí condición</strong>
@@ -113,6 +113,7 @@ export function AlertBuilder() {
               <button
                 className={`option-button ${condition === type.value ? "is-selected" : ""}`}
                 key={type.value}
+                aria-pressed={condition === type.value}
                 type="button"
                 onClick={() => setCondition(type.value)}
               >
@@ -141,6 +142,9 @@ export function AlertBuilder() {
             />
             <em>{definition.targetSuffix}</em>
           </label>
+          <p className="step-helper">
+            Usá porcentaje para alertas de tasas de interés. Usá precio en pesos para alertas de monedas o tipos de cambio.
+          </p>
         </div>
 
         <div className="builder-step">

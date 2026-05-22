@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Bell, Clock3, TrendingDown, TrendingUp } from "lucide-react";
+import { FlagBadge } from "@/components/FlagBadge";
 import { formatDateTime, formatMoney, formatPercent } from "@/lib/format";
 import type { Rate } from "@/lib/types";
 
@@ -13,9 +14,7 @@ export function RateCard({ rate }: { rate: Rate }) {
     <article className="rate-card">
       <div className="rate-card__top">
         <div className="rate-card__identity">
-          <span className="rate-card__flag" aria-hidden>
-            {rate.flag}
-          </span>
+          <FlagBadge rate={rate} />
           <div>
             <h3>{rate.name}</h3>
             <p>{rate.country}</p>

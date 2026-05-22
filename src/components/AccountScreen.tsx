@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Bell, Crown, LogOut, Pencil, Star, Trash2 } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
+import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_TYPES } from "@/lib/constants";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { useAccount, useRates } from "@/lib/hooks";
@@ -11,6 +12,11 @@ import type { AlertLog, UserAlert } from "@/lib/types";
 
 function alertLabel(alert: UserAlert) {
   return ALERT_TYPES.find((type) => type.value === alert.condition_type)?.label ?? alert.condition_type;
+}
+
+function spreadLabel(buy: number | null, sell: number | null) {
+  if (buy === null || sell === null) return "Spread sin datos";
+  return `Spread ${formatMoney(sell - buy, true)}`;
 }
 
 export function AccountScreen() {
@@ -186,10 +192,25 @@ export function AccountScreen() {
                 type="button"
                 onClick={() => toggleFavorite(rate.code)}
               >
-                <Star size={17} />
-                <span>{rate.flag}</span>
-                <strong>{rate.name}</strong>
-                <small>{formatMoney(rate.sell_price, true)}</small>
+                <span className="favorite-button__top">
+                  <FlagBadge compact rate={rate} />
+                  <span>
+                    <strong>{rate.name}</strong>
+                    <small>{rate.country}</small>
+                  </span>
+                  <Star size={17} />
+                </span>
+                <span className="favorite-quotes">
+                  <span>
+                    <em>Compra</em>
+                    <b>{formatMoney(rate.buy_price, true)}</b>
+                  </span>
+                  <span>
+                    <em>Venta</em>
+                    <b>{formatMoney(rate.sell_price, true)}</b>
+                  </span>
+                </span>
+                <small className="spread-line">{spreadLabel(rate.buy_price, rate.sell_price)}</small>
               </button>
             ))}
         </div>
