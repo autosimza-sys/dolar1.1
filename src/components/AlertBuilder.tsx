@@ -3,14 +3,21 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Check, ChevronRight, Mail, MessageCircle, SlidersHorizontal } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, DollarSign, Mail, MessageCircle, Percent, SlidersHorizontal } from "lucide-react";
 import { AuthModal } from "@/components/AuthModal";
+import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_CHANNELS, ALERT_TYPES } from "@/lib/constants";
 import { useAccount, useRates } from "@/lib/hooks";
 import type { AlertCondition, Channel } from "@/lib/types";
 
+type ValueKind = "price" | "percent";
+
 function getAlertDefinition(value: AlertCondition) {
   return ALERT_TYPES.find((type) => type.value === value) ?? ALERT_TYPES[0];
+}
+
+function suggestedValueKind(definition: ReturnType<typeof getAlertDefinition>): ValueKind {
+  return definition.targetSuffix === "%" ? "percent" : "price";
 }
 
 export function AlertBuilder() {
@@ -23,8 +30,12 @@ export function AlertBuilder() {
   const [condition, setCondition] = useState<AlertCondition>(initialType);
   const definition = useMemo(() => getAlertDefinition(condition), [condition]);
   const [rateCode, setRateCode] = useState(initialRate ?? definition.defaultRateCode);
-  const [targetValue, setTargetValue] = useState("1200");
+  const selectedRate = useMemo(() => rates.find((rate) => rate.code === rateCode) ?? rates[0], [rateCode, rates]);
+  const [targetValue, setTargetValue] = useState("");
+  const [valueKind, setValueKind] = useState<ValueKind>(suggestedValueKind(definition));
   const [channel, setChannel] = useState<Channel>("email");
+  const [rateOpen, setRateOpen] = useState(false);
+  const [conditionOpen, setConditionOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
@@ -33,7 +44,13 @@ export function AlertBuilder() {
     if (!initialRate) {
       setRateCode(definition.defaultRateCode);
     }
-  }, [definition.defaultRateCode, initialRate]);
+
+    setValueKind(suggestedValueKind(definition));
+  }, [definition, initialRate]);
+
+  const valueSuffix = valueKind === "percent" ? "%" : "$";
+  const valuePlaceholder = valueKind === "percent" ? "Ingresá porcentaje" : "Ingresá precio en pesos";
+  const valueExample = valueKind === "percent" ? "Ejemplo: 35" : "Ejemplo: 1400";
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,38 +106,84 @@ export function AlertBuilder() {
       </section>
 
       <form className="builder" onSubmit={handleSave}>
-        <div className="builder-step builder-step--conditions">
+        <div className="builder-step builder-step--rate">
           <div className="step-title">
             <span>1</span>
             <strong>Elegí moneda o indicador</strong>
           </div>
-          <select value={rateCode} onChange={(event) => setRateCode(event.target.value)}>
-            {rates.map((rate) => (
-              <option value={rate.code} key={rate.code}>
-                {rate.flag} {rate.name}
-              </option>
-            ))}
-          </select>
+
+          <div className={`select-popover ${rateOpen ? "is-open" : ""}`}>
+            <button className="select-popover__trigger" type="button" onClick={() => setRateOpen((current) => !current)}>
+              {selectedRate ? <FlagBadge compact rate={selectedRate} /> : null}
+              <span>
+                <strong>{selectedRate?.name ?? "Elegí moneda"}</strong>
+                <small>{selectedRate?.country ?? "Moneda o indicador"}</small>
+              </span>
+              <ChevronDown size={18} />
+            </button>
+
+            {rateOpen ? (
+              <div className="select-popover__menu">
+                {rates.map((rate) => (
+                  <button
+                    className={`select-popover__option ${rateCode === rate.code ? "is-selected" : ""}`}
+                    key={rate.code}
+                    type="button"
+                    onClick={() => {
+                      setRateCode(rate.code);
+                      setRateOpen(false);
+                    }}
+                  >
+                    <FlagBadge compact rate={rate} />
+                    <span>
+                      <strong>{rate.name}</strong>
+                      <small>{rate.country}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        <div className="builder-step builder-step--channel">
+        <div className="builder-step builder-step--condition">
           <div className="step-title">
             <span>2</span>
             <strong>Elegí condición</strong>
           </div>
-          <div className="option-list">
-            {ALERT_TYPES.map((type) => (
-              <button
-                className={`option-button ${condition === type.value ? "is-selected" : ""}`}
-                key={type.value}
-                aria-pressed={condition === type.value}
-                type="button"
-                onClick={() => setCondition(type.value)}
-              >
-                <span>{type.label}</span>
-                <small>{type.helper}</small>
-              </button>
-            ))}
+
+          <div className={`select-popover ${conditionOpen ? "is-open" : ""}`}>
+            <button className="select-popover__trigger" type="button" onClick={() => setConditionOpen((current) => !current)}>
+              <SlidersHorizontal size={18} />
+              <span>
+                <strong>{definition.label}</strong>
+                <small>{definition.helper}</small>
+              </span>
+              <ChevronDown size={18} />
+            </button>
+
+            {conditionOpen ? (
+              <div className="select-popover__menu select-popover__menu--conditions">
+                {ALERT_TYPES.map((type) => (
+                  <button
+                    className={`select-popover__option select-popover__option--condition ${
+                      condition === type.value ? "is-selected" : ""
+                    }`}
+                    key={type.value}
+                    type="button"
+                    onClick={() => {
+                      setCondition(type.value);
+                      setConditionOpen(false);
+                    }}
+                  >
+                    <span>
+                      <strong>{type.label}</strong>
+                      <small>{type.helper}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -129,25 +192,47 @@ export function AlertBuilder() {
             <span>3</span>
             <strong>Precio o porcentaje</strong>
           </div>
+
+          <div className="value-kind-grid" aria-label="Tipo de valor">
+            <button
+              className={`value-kind-button ${valueKind === "price" ? "is-selected" : ""}`}
+              type="button"
+              onClick={() => setValueKind("price")}
+            >
+              <DollarSign size={17} />
+              Precio $
+            </button>
+            <button
+              className={`value-kind-button ${valueKind === "percent" ? "is-selected" : ""}`}
+              type="button"
+              onClick={() => setValueKind("percent")}
+            >
+              <Percent size={17} />
+              Porcentaje %
+            </button>
+          </div>
+
           <label className="target-input">
             <SlidersHorizontal size={18} />
             <input
               inputMode="decimal"
               min="0"
+              placeholder={valuePlaceholder}
               required
               step="0.01"
               type="number"
               value={targetValue}
               onChange={(event) => setTargetValue(event.target.value)}
             />
-            <em>{definition.targetSuffix}</em>
+            <em>{valueSuffix}</em>
           </label>
+          <small className="input-example">{valueExample}</small>
           <p className="step-helper">
             Usá porcentaje para alertas de tasas de interés. Usá precio en pesos para alertas de monedas o tipos de cambio.
           </p>
         </div>
 
-        <div className="builder-step">
+        <div className="builder-step builder-step--channel">
           <div className="step-title">
             <span>4</span>
             <strong>Canal</strong>
