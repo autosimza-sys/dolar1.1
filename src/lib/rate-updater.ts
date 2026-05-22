@@ -388,6 +388,7 @@ function makeReading(
 ): SourceReading {
   const buyPrice = normalizeNumber(buy);
   const sellPrice = normalizeNumber(sell);
+  const safeFetchedAt = fetchedAt && !Number.isNaN(new Date(fetchedAt).getTime()) ? fetchedAt : new Date().toISOString();
 
   return {
     rate_code: code,
@@ -399,9 +400,28 @@ function makeReading(
     status: "accepted",
     reason: null,
     payload,
-    fetched_at: fetchedAt,
+    fetched_at: safeFetchedAt,
     priority: source.priority
   };
+}
+
+function readingTime(reading: SourceReading) {
+  const time = new Date(reading.fetched_at).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function latestBySourceAndCode(readings: SourceReading[]) {
+  const latest = new Map<string, SourceReading>();
+
+  for (const reading of readings) {
+    const key = `${reading.source_key}:${reading.rate_code}`;
+    const current = latest.get(key);
+    if (!current || readingTime(reading) > readingTime(current)) {
+      latest.set(key, reading);
+    }
+  }
+
+  return Array.from(latest.values());
 }
 
 function mapDolarApiCasa(casa: string | undefined) {
@@ -521,22 +541,35 @@ async function fetchSourceReadings(source: SourceDefinition, supabase: NonNullab
   }
 
   if (source.parser_type === "argentina_datos_dolares") {
-    return (rows as Array<Record<string, unknown>>)
+    const readings = (rows as Array<Record<string, unknown>>)
       .map((row) => {
         const code = mapArgentinaDatosCasa(String(row.casa ?? row.nombre ?? row.tipo ?? ""));
-        return code ? makeReading(source, code, row.compra ?? null, row.venta ?? null, row) : null;
+        return code ? makeReading(source, code, row.compra ?? null, row.venta ?? null, row, String(row.fecha ?? row.fechaActualizacion ?? "")) : null;
       })
       .filter((row): row is SourceReading => Boolean(row));
+
+    return latestBySourceAndCode(readings);
   }
 
   if (source.parser_type === "ratesarg_cotizaciones") {
-    return (rows as Array<Record<string, unknown>>)
+    const readings = (rows as Array<Record<string, unknown>>)
       .map((row) => {
         const key = String(row.codigo ?? row.code ?? row.nombre ?? row.tipo ?? row.casa ?? "").toLowerCase();
         const code = mapArgentinaDatosCasa(key) ?? mapCurrency(String(row.moneda ?? row.currency ?? ""));
-        return code ? makeReading(source, code, row.compra ?? row.buy ?? null, row.venta ?? row.sell ?? row.valor ?? row.price ?? null, row) : null;
+        return code
+          ? makeReading(
+              source,
+              code,
+              row.compra ?? row.buy ?? null,
+              row.venta ?? row.sell ?? row.valor ?? row.price ?? null,
+              row,
+              String(row.fecha ?? row.fechaActualizacion ?? row.updated_at ?? "")
+            )
+          : null;
       })
       .filter((row): row is SourceReading => Boolean(row));
+
+    return latestBySourceAndCode(readings);
   }
 
   return [];
@@ -544,16 +577,24 @@ async function fetchSourceReadings(source: SourceDefinition, supabase: NonNullab
 
 function validateReadings(code: string, readings: SourceReading[]) {
   const metadata = metadataFor(code);
+  const staleLimitMs = metadata.market === "indicator" ? 10 * 24 * 60 * 60 * 1000 : 36 * 60 * 60 * 1000;
+  const now = Date.now();
   const bounded = readings.map((reading) => {
     const value = reading.midpoint;
     if (!value || value < metadata.min || value > metadata.max) {
       return { ...reading, status: "rejected" as const, reason: "Valor fuera de rango esperado" };
     }
+
+    if (now - readingTime(reading) > staleLimitMs) {
+      return { ...reading, status: "rejected" as const, reason: "Dato desactualizado" };
+    }
+
     return reading;
   });
 
   const accepted = bounded.filter((reading) => reading.status === "accepted" && reading.midpoint !== null);
-  const center = median(accepted.map((reading) => reading.midpoint as number));
+  const anchor = accepted.sort((a, b) => a.priority - b.priority || readingTime(b) - readingTime(a))[0];
+  const center = anchor?.midpoint ?? median(accepted.map((reading) => reading.midpoint as number));
   if (!center || accepted.length <= 1) return bounded;
 
   return bounded.map((reading) => {
@@ -710,8 +751,9 @@ export async function updateRatesFromSources() {
     }
   }
 
-  const codes = Array.from(new Set([...rawReadings.map((reading) => reading.rate_code), ...Object.keys(RATE_METADATA)]));
-  const validatedReadings = codes.flatMap((code) => validateReadings(code, rawReadings.filter((reading) => reading.rate_code === code)));
+  const normalizedReadings = latestBySourceAndCode(rawReadings);
+  const codes = Array.from(new Set([...normalizedReadings.map((reading) => reading.rate_code), ...Object.keys(RATE_METADATA)]));
+  const validatedReadings = codes.flatMap((code) => validateReadings(code, normalizedReadings.filter((reading) => reading.rate_code === code)));
   const updates = codes
     .map((code) => aggregate(code, validatedReadings.filter((reading) => reading.rate_code === code), oldRates.get(code)))
     .filter((update): update is RateUpdate => Boolean(update));
