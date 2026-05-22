@@ -60,6 +60,14 @@ function asNumber(value: FormDataEntryValue | null) {
   return Number(value);
 }
 
+function parseAdminEmails(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => String(item).trim().toLowerCase())
+    .filter(Boolean);
+}
+
 function AdminRateCard({
   rate,
   onSave,
@@ -133,16 +141,53 @@ export function AdminScreen() {
   const [data, setData] = useState<AdminData>(emptyAdminData);
   const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [dbAdminEmails, setDbAdminEmails] = useState<string[]>([]);
+  const [adminCheckDone, setAdminCheckDone] = useState(false);
 
-  const adminEmails = getAdminEmails();
+  const adminEmails = useMemo(() => getAdminEmails(), []);
   const email = account.user?.email?.toLowerCase() ?? "";
-  const isAdmin = adminEmails.length ? adminEmails.includes(email) : email === "admin@dolarmendoza.app";
+  const isAdmin =
+    dbAdminEmails.includes(email) ||
+    adminEmails.includes(email) ||
+    (!adminEmails.length && email === "admin@dolarmendoza.app");
+  const isCheckingAdmin = Boolean(account.supabase && account.user && !adminCheckDone && !isAdmin);
 
   const visibleRates = useMemo(() => data.rates.filter((rate) => rate.is_visible).length, [data.rates]);
   const unreliableSources = useMemo(
     () => data.rates.filter((rate) => !rate.source || rate.source.toLowerCase().includes("sin fuente")).length,
     [data.rates]
   );
+
+  useEffect(() => {
+    if (!account.supabase || !account.user) {
+      setDbAdminEmails([]);
+      setAdminCheckDone(true);
+      return;
+    }
+
+    const supabase = account.supabase;
+    let ignore = false;
+
+    async function loadAdminEmails() {
+      setAdminCheckDone(false);
+      const { data: settings } = await supabase
+        .from("admin_settings")
+        .select("value")
+        .eq("key", "admin_emails")
+        .maybeSingle();
+
+      if (ignore) return;
+
+      setDbAdminEmails(parseAdminEmails(settings?.value));
+      setAdminCheckDone(true);
+    }
+
+    void loadAdminEmails();
+
+    return () => {
+      ignore = true;
+    };
+  }, [account.supabase, account.user]);
 
   const reload = useCallback(async () => {
     if (!account.supabase || !account.user || !isAdmin) {
@@ -353,6 +398,14 @@ export function AdminScreen() {
         <div className="panel">
           <AuthForm onSuccess={account.reload} />
         </div>
+      </div>
+    );
+  }
+
+  if (isCheckingAdmin) {
+    return (
+      <div className="screen">
+        <p className="loading-line">Verificando acceso admin...</p>
       </div>
     );
   }
