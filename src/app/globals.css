@@ -291,50 +291,15 @@ button:disabled {
 
 .rate-card__flag {
   align-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 7px;
   display: inline-flex;
   font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
-  font-size: 23px;
-  gap: 4px;
-  height: 44px;
-  justify-content: center;
-  min-width: 50px;
-  padding: 6px;
+  font-size: 18px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .rate-card__flag--compact {
-  height: 34px;
-  min-width: 44px;
-  padding: 5px;
-}
-
-.flag-stack {
-  min-width: 62px;
-  overflow: visible;
-  position: relative;
-}
-
-.flag-stack img {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-  display: block;
-  height: 17px;
-  object-fit: cover;
-  width: 27px;
-}
-
-.flag-stack img + img {
-  margin-left: 0;
-}
-
-.flag-stack.rate-card__flag--compact {
-  min-width: 54px;
-}
-
-.flag-stack.rate-card__flag--compact img {
-  height: 15px;
-  width: 24px;
+  font-size: 15px;
 }
 
 .rate-card h3,
@@ -1442,6 +1407,12 @@ input:focus {
   color: var(--green);
   font-size: 12px;
   font-weight: 900;
+}
+
+.admin-rate-card__code {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
 }
 
 .switch input {

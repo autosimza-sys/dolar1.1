@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bell, Check, Crown, Database, Eye, EyeOff, Save, ShieldCheck, Users } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
+import { FlagBadge } from "@/components/FlagBadge";
 import { demoRates } from "@/lib/demo-data";
 import { formatDateTime, formatMoney, formatPercent } from "@/lib/format";
 import { getAdminEmails, useAccount } from "@/lib/hooks";
@@ -81,8 +82,9 @@ function AdminRateCard({
     <form className="admin-rate-card" onSubmit={handleSubmit}>
       <div className="admin-rate-card__head">
         <div>
-          <span>
-            {rate.flag} {rate.code}
+          <span className="admin-rate-card__code">
+            <FlagBadge compact rate={rate} />
+            {rate.code}
           </span>
           <strong>{rate.name}</strong>
         </div>
