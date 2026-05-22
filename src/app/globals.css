@@ -1018,6 +1018,64 @@ input:focus {
   gap: 10px;
 }
 
+.auth-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.auth-copy h2,
+.auth-state h2 {
+  font-size: 20px;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.auth-copy p,
+.auth-state p {
+  color: var(--gray-text);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.auth-state {
+  align-items: flex-start;
+  background: rgba(0, 200, 83, 0.07);
+  border: 1px solid rgba(0, 200, 83, 0.28);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 16px;
+}
+
+.auth-state > svg {
+  color: var(--green);
+}
+
+.auth-state small {
+  color: rgba(163, 163, 163, 0.75);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.auth-link-button {
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 850;
+  min-height: 28px;
+  padding: 0;
+  text-align: left;
+}
+
+.auth-link-button--center {
+  align-self: center;
+  text-align: center;
+}
+
 .segmented {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--gray-border);

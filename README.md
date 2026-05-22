@@ -299,3 +299,49 @@ El SQL carga:
 - Tarjetas de educación financiera
 
 Si Supabase no está configurado todavía, la UI usa datos demo locales para poder revisar el diseño.
+
+## 12. Emails de cuenta
+
+Para que el registro y la recuperación de contraseña usen el dominio propio, en Supabase configurá:
+
+```text
+Authentication > URL Configuration
+```
+
+Site URL:
+
+```text
+https://dolarmza.com.ar
+```
+
+Redirect URLs:
+
+```text
+https://dolarmza.com.ar/account
+https://www.dolarmza.com.ar/account
+https://dolarmza.com.ar/reset-password
+https://www.dolarmza.com.ar/reset-password
+```
+
+En `Authentication > Emails > Templates`, pegar:
+
+- `supabase/email-templates/confirm-account.html` para `Confirm signup`.
+- `supabase/email-templates/reset-password.html` para `Reset password`.
+
+Subjects:
+
+```text
+Confirmá tu cuenta en Dólar MZA
+Restablecé tu contraseña en Dólar MZA
+```
+
+SMTP recomendado con Resend:
+
+```text
+Sender email: no-reply@dolarmza.com.ar
+Sender name: Dólar MZA
+Host: smtp.resend.com
+Port: 465
+Username: resend
+Password: RESEND_API_KEY
+```
