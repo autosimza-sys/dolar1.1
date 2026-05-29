@@ -6,6 +6,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type AuthFormProps = {
   compact?: boolean;
+  initialMode?: AuthMode;
   onSuccess?: () => void;
 };
 
@@ -60,9 +61,9 @@ function getFriendlyAuthError(message: string) {
   return "No pudimos completar la operación. Revisá los datos e intentá de nuevo.";
 }
 
-export function AuthForm({ compact = false, onSuccess }: AuthFormProps) {
+export function AuthForm({ compact = false, initialMode = "register", onSuccess }: AuthFormProps) {
   const supabase = createSupabaseBrowserClient();
-  const [mode, setMode] = useState<AuthMode>("register");
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [view, setView] = useState<AuthView>("form");
   const [email, setEmail] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");

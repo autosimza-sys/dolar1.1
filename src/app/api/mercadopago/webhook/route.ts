@@ -18,6 +18,11 @@ type MercadoPagoPreapproval = {
   status?: string;
   external_reference?: string;
   payer_email?: string;
+  preapproval_plan_id?: string;
+  metadata?: {
+    user_id?: string;
+    plan?: string;
+  };
 };
 
 function mapStatus(status?: string) {
@@ -26,6 +31,19 @@ function mapStatus(status?: string) {
   if (status === "cancelled" || status === "rejected") return "cancelled";
   if (status === "paused") return "paused";
   return "pending";
+}
+
+function planFromPreapprovalPlanId(preapprovalPlanId?: string) {
+  if (!preapprovalPlanId) return null;
+  if (preapprovalPlanId === process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_ESSENTIAL_ID) return "essential_monthly";
+  if (preapprovalPlanId === process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_TRACKING_ID) return "tracking_monthly";
+  if (
+    preapprovalPlanId === process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_PREMIUM_ID ||
+    preapprovalPlanId === process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_ID
+  ) {
+    return "premium_monthly";
+  }
+  return null;
 }
 
 async function fetchMercadoPago<T>(path: string, token: string) {
@@ -78,9 +96,10 @@ export async function POST(request: NextRequest) {
     plan = payment?.metadata?.plan ?? plan;
   } else if (topic.includes("preapproval")) {
     const preapproval = await fetchMercadoPago<MercadoPagoPreapproval>(`/preapproval/${id}`, token);
-    userId = preapproval?.external_reference;
+    userId = preapproval?.metadata?.user_id ?? preapproval?.external_reference;
     mercadoPagoPaymentId = preapproval?.id ?? id;
     status = mapStatus(preapproval?.status);
+    plan = preapproval?.metadata?.plan ?? planFromPreapprovalPlanId(preapproval?.preapproval_plan_id) ?? plan;
   }
 
   if (!userId) {

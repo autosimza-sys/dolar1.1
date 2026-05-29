@@ -68,6 +68,30 @@ function parseAdminEmails(value: unknown) {
     .filter(Boolean);
 }
 
+async function fetchAdminData() {
+  const response = await fetch("/api/admin/data", { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as AdminData & { error?: string };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? "No se pudo cargar el panel admin.");
+  }
+
+  return payload;
+}
+
+async function runAdminAction(body: Record<string, unknown>) {
+  const response = await fetch("/api/admin/actions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const payload = (await response.json().catch(() => ({}))) as { error?: string };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? "No se pudo ejecutar la accion.");
+  }
+}
+
 function AdminRateCard({
   rate,
   onSave,
@@ -190,82 +214,33 @@ export function AdminScreen() {
   }, [account.supabase, account.user]);
 
   const reload = useCallback(async () => {
-    if (!account.supabase || !account.user || !isAdmin) {
+    if (!account.user || !isAdmin) {
       setData({ ...emptyAdminData, rates: demoRates });
       return;
     }
 
     setIsLoading(true);
-    const [
-      rates,
-      profiles,
-      alerts,
-      subscriptions,
-      educationCards,
-      notificationJobs,
-      sourceUpdateLogs,
-      rateSources,
-      sourceReadings,
-      communityReports,
-      blueMendozaManual,
-      communityFilters
-    ] = await Promise.all([
-      account.supabase.from("rates").select("*").order("type", { ascending: true }).order("name", { ascending: true }),
-      account.supabase.from("profiles").select("*").order("created_at", { ascending: false }).limit(100),
-      account.supabase.from("alerts").select("*").order("created_at", { ascending: false }).limit(200),
-      account.supabase.from("subscriptions").select("*").order("started_at", { ascending: false }).limit(100),
-      account.supabase.from("education_cards").select("*").order("created_at", { ascending: false }).limit(100),
-      account.supabase.from("notification_jobs").select("*").order("created_at", { ascending: false }).limit(20),
-      account.supabase.from("source_update_logs").select("*").order("finished_at", { ascending: false }).limit(10),
-      account.supabase.from("rate_sources").select("*").order("priority", { ascending: true }),
-      account.supabase.from("rate_source_readings").select("*").order("fetched_at", { ascending: false }).limit(40),
-      account.supabase.from("community_reports").select("*").order("created_at", { ascending: false }).limit(80),
-      account.supabase.from("admin_settings").select("value").eq("key", "blue_mendoza_manual").maybeSingle(),
-      account.supabase.from("admin_settings").select("value").eq("key", "community_filters_enabled").maybeSingle()
-    ]);
-
-    const firstError =
-      rates.error ??
-      profiles.error ??
-      alerts.error ??
-      subscriptions.error ??
-      educationCards.error ??
-      notificationJobs.error ??
-      sourceUpdateLogs.error ??
-      rateSources.error ??
-      sourceReadings.error ??
-      communityReports.error ??
-      blueMendozaManual.error ??
-      communityFilters.error;
-    if (firstError) {
-      setMessage(firstError.message);
+    try {
+      const adminData = await fetchAdminData();
+      setData({
+        ...adminData,
+        rates: adminData.rates.length ? adminData.rates : demoRates,
+        blueMendozaManual: adminData.blueMendozaManual ?? null,
+        communityFiltersEnabled: adminData.communityFiltersEnabled !== false
+      });
+    } catch (error) {
+      setData({ ...emptyAdminData, rates: demoRates });
+      setMessage(error instanceof Error ? error.message : "No se pudo cargar el panel admin.");
+    } finally {
+      setIsLoading(false);
     }
-
-    setData({
-      rates: ((rates.data as Rate[] | null) ?? demoRates) as Rate[],
-      profiles: (profiles.data as Profile[] | null) ?? [],
-      alerts: (alerts.data as UserAlert[] | null) ?? [],
-      subscriptions: (subscriptions.data as Subscription[] | null) ?? [],
-      educationCards: (educationCards.data as EducationCard[] | null) ?? [],
-      notificationJobs: (notificationJobs.data as NotificationJob[] | null) ?? [],
-      sourceUpdateLogs: (sourceUpdateLogs.data as SourceUpdateLog[] | null) ?? [],
-      rateSources: (rateSources.data as RateSource[] | null) ?? [],
-      sourceReadings: (sourceReadings.data as RateSourceReading[] | null) ?? [],
-      communityReports: (communityReports.data as CommunityReport[] | null) ?? [],
-      blueMendozaManual:
-        (blueMendozaManual.data?.value as AdminData["blueMendozaManual"] | null | undefined) ?? null,
-      communityFiltersEnabled: communityFilters.data?.value !== false
-    });
-    setIsLoading(false);
-  }, [account.supabase, account.user, isAdmin]);
+  }, [account.user, isAdmin]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
   async function saveRate(rate: Rate, formData: FormData) {
-    if (!account.supabase) return;
-
     const payload = {
       buy_price: asNumber(formData.get("buy_price")),
       sell_price: asNumber(formData.get("sell_price")),
@@ -275,92 +250,80 @@ export function AdminScreen() {
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await account.supabase.from("rates").update(payload).eq("code", rate.code);
-    setMessage(error ? error.message : `${rate.name} actualizada.`);
-    await reload();
+    try {
+      await runAdminAction({ action: "save_rate", rateCode: rate.code, payload });
+      setMessage(`${rate.name} actualizada.`);
+      await reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo guardar la cotizacion.");
+    }
   }
 
   async function markUnreliable(rate: Rate) {
-    if (!account.supabase) return;
-
-    const { error } = await account.supabase
-      .from("rates")
-      .update({
-        source: "Sin fuente confiable",
-        is_visible: false,
-        updated_at: new Date().toISOString()
-      })
-      .eq("code", rate.code);
-
-    setMessage(error ? error.message : `${rate.name} se ocultó por falta de fuente confiable.`);
-    await reload();
+    try {
+      await runAdminAction({ action: "mark_rate_unreliable", rateCode: rate.code });
+      setMessage(`${rate.name} se oculto por falta de fuente confiable.`);
+      await reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo ocultar la cotizacion.");
+    }
   }
 
   async function toggleRateSource(source: RateSource) {
-    if (!account.supabase) return;
-
-    const { error } = await account.supabase.from("rate_sources").update({ enabled: !source.enabled }).eq("id", source.id);
-    setMessage(error ? error.message : `${source.name} ${source.enabled ? "desactivada" : "activada"}.`);
-    await reload();
+    try {
+      await runAdminAction({ action: "toggle_rate_source", sourceId: source.id, enabled: !source.enabled });
+      setMessage(`${source.name} ${source.enabled ? "desactivada" : "activada"}.`);
+      await reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo actualizar la fuente.");
+    }
   }
 
   async function saveBlueMendozaManual(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!account.supabase) return;
 
     const formData = new FormData(event.currentTarget);
     const payload = {
-      key: "blue_mendoza_manual",
-      value: {
-        enabled: formData.get("enabled") === "on",
-        buy_price: asNumber(formData.get("buy_price")),
-        sell_price: asNumber(formData.get("sell_price")),
-        note: String(formData.get("note") ?? "")
-      }
+      enabled: formData.get("enabled") === "on",
+      buy_price: asNumber(formData.get("buy_price")),
+      sell_price: asNumber(formData.get("sell_price")),
+      note: String(formData.get("note") ?? "")
     };
 
-    const { error } = await account.supabase.from("admin_settings").upsert(payload, { onConflict: "key" });
-    setMessage(error ? error.message : "Blue Mendoza manual actualizado.");
-    await reload();
+    try {
+      await runAdminAction({ action: "save_blue_mendoza_manual", payload });
+      setMessage("Blue Mendoza manual actualizado.");
+      await reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo guardar Blue Mendoza.");
+    }
   }
 
   async function toggleCommunityFilters() {
-    if (!account.supabase) return;
-
-    const { error } = await account.supabase.from("admin_settings").upsert(
-      {
-        key: "community_filters_enabled",
-        value: !data.communityFiltersEnabled
-      },
-      { onConflict: "key" }
-    );
-
-    setMessage(error ? error.message : "Filtro de comunidad actualizado.");
-    await reload();
+    try {
+      await runAdminAction({ action: "toggle_community_filters", enabled: !data.communityFiltersEnabled });
+      setMessage("Filtro de comunidad actualizado.");
+      await reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo actualizar el filtro de comunidad.");
+    }
   }
 
   async function moderateCommunityReport(report: CommunityReport, status: CommunityReport["status"]) {
-    if (!account.supabase) return;
-
-    const { error } = await account.supabase
-      .from("community_reports")
-      .update({
-        status,
-        include_in_stats: status === "approved",
-        moderation_reason: status === "approved" ? null : "Moderado por admin"
-      })
-      .eq("id", report.id);
-
-    setMessage(error ? error.message : "Reporte comunitario actualizado.");
-    await reload();
+    try {
+      await runAdminAction({ action: "moderate_community_report", reportId: report.id, status });
+      setMessage("Reporte comunitario actualizado.");
+      await reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo moderar el reporte.");
+    }
   }
 
   async function createRate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!account.supabase) return;
 
     const formData = new FormData(event.currentTarget);
-    const { error } = await account.supabase.from("rates").upsert({
+    const payload = {
       code: String(formData.get("code") ?? "").trim().toUpperCase(),
       name: String(formData.get("name") ?? "").trim(),
       country: String(formData.get("country") ?? "").trim(),
@@ -372,11 +335,16 @@ export function AdminScreen() {
       source: String(formData.get("source") ?? "Carga manual"),
       is_visible: true,
       updated_at: new Date().toISOString()
-    });
+    };
 
-    setMessage(error ? error.message : "Cotización cargada.");
-    event.currentTarget.reset();
-    await reload();
+    try {
+      await runAdminAction({ action: "create_rate", payload });
+      setMessage("Cotizacion cargada.");
+      event.currentTarget.reset();
+      await reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo cargar la cotizacion.");
+    }
   }
 
   if (account.isLoading) {
@@ -396,7 +364,7 @@ export function AdminScreen() {
           <p>Entrá con el email admin configurado en Supabase.</p>
         </section>
         <div className="panel">
-          <AuthForm onSuccess={account.reload} />
+          <AuthForm initialMode="login" onSuccess={account.reload} />
         </div>
       </div>
     );

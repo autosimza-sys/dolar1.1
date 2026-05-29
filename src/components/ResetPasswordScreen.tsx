@@ -10,7 +10,7 @@ function getFriendlyResetError(message: string) {
   const normalized = message.toLowerCase();
 
   if (normalized.includes("session") || normalized.includes("token") || normalized.includes("expired")) {
-    return "El enlace venció o ya fue usado. Pedí uno nuevo desde el login.";
+    return "El enlace venció o no es válido. Volvé a solicitar la recuperación de contraseña.";
   }
 
   if (normalized.includes("password")) {
@@ -40,6 +40,10 @@ export function ResetPasswordScreen() {
       }
 
       const code = searchParams.get("code");
+      const urlLooksLikeRecovery =
+        searchParams.get("type") === "recovery" ||
+        Boolean(code) ||
+        (typeof window !== "undefined" && window.location.hash.includes("type=recovery"));
 
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -48,7 +52,14 @@ export function ResetPasswordScreen() {
         }
       } else {
         const { data } = await supabase.auth.getSession();
-        if (!data.session) {
+        if (!data.session && urlLooksLikeRecovery) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const { data: retry } = await supabase.auth.getSession();
+
+          if (!retry.session) {
+            setMessage("El enlace venció o no es válido. Volvé a solicitar la recuperación de contraseña.");
+          }
+        } else if (!data.session) {
           setMessage("Abrí esta pantalla desde el correo de recuperación para cambiar tu contraseña.");
         }
       }
@@ -88,7 +99,7 @@ export function ResetPasswordScreen() {
     }
 
     setIsDone(true);
-    setMessage("Contraseña actualizada. Ya podés entrar a tu cuenta.");
+    setMessage("Tu contraseña fue actualizada correctamente.");
     setTimeout(() => router.push("/account"), 1600);
   }
 
@@ -96,7 +107,7 @@ export function ResetPasswordScreen() {
     <div className="screen">
       <section className="page-header">
         <p className="eyebrow">Cuenta</p>
-        <h1>Nueva contraseña</h1>
+        <h1>Crear nueva contraseña</h1>
         <p>Elegí una contraseña segura para volver a ingresar a Dólar MZA.</p>
       </section>
 
@@ -104,7 +115,7 @@ export function ResetPasswordScreen() {
         {isDone ? (
           <div className="auth-state">
             <CheckCircle2 size={34} />
-            <h2>Contraseña guardada</h2>
+            <h2>Tu contraseña fue actualizada correctamente.</h2>
             <p>Te estamos llevando a tu cuenta.</p>
           </div>
         ) : (
@@ -126,7 +137,7 @@ export function ResetPasswordScreen() {
             </label>
 
             <label className="field">
-              <span>Confirmar contraseña</span>
+              <span>Repetir nueva contraseña</span>
               <div className="field__control">
                 <Lock size={18} />
                 <input

@@ -117,6 +117,34 @@ export const ALERT_TYPES: Array<{
     helper: "Para viajes o ahorro en euros.",
     defaultRateCode: "EUR_BLUE",
     targetSuffix: "%"
+  },
+  {
+    value: "official_market_open",
+    label: "Apertura mercado oficial",
+    helper: "Aviso al inicio del horario bancario.",
+    defaultRateCode: "USD_OFICIAL",
+    targetSuffix: "hora"
+  },
+  {
+    value: "official_market_close",
+    label: "Cierre mercado oficial",
+    helper: "Aviso cerca del cierre del horario bancario.",
+    defaultRateCode: "USD_OFICIAL",
+    targetSuffix: "hora"
+  },
+  {
+    value: "informal_market_open",
+    label: "Apertura mercado informal",
+    helper: "Aviso cuando empieza a moverse el mercado blue.",
+    defaultRateCode: "USD_BLUE",
+    targetSuffix: "hora"
+  },
+  {
+    value: "informal_market_close",
+    label: "Cierre mercado informal",
+    helper: "Aviso para revisar precios antes del cierre.",
+    defaultRateCode: "USD_BLUE",
+    targetSuffix: "hora"
   }
 ];
 
@@ -133,7 +161,11 @@ export const ALERT_MESSAGES: Record<AlertCondition, string> = {
   travel_opportunity: "Hay movimiento para moneda de viaje. Revisalo antes de comprar.",
   clp_strong_move: "El peso chileno se movió fuerte. Revisalo antes de comprar.",
   brl_strong_move: "El real se movió fuerte. Revisalo antes de comprar.",
-  eur_strong_move: "El euro se movió fuerte. Revisalo antes de comprar."
+  eur_strong_move: "El euro se movió fuerte. Revisalo antes de comprar.",
+  official_market_open: "Abrió el mercado oficial. Revisá los primeros precios del día.",
+  official_market_close: "Cierra el mercado oficial. Revisá el valor antes del cierre.",
+  informal_market_open: "Empieza a moverse el mercado informal. Mirá el blue temprano.",
+  informal_market_close: "Cierra el mercado informal. Revisá el precio antes de decidir."
 };
 
 export const PREMIUM_BULLETS = [

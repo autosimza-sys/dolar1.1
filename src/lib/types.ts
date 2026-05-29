@@ -15,7 +15,11 @@ export type AlertCondition =
   | "travel_opportunity"
   | "clp_strong_move"
   | "brl_strong_move"
-  | "eur_strong_move";
+  | "eur_strong_move"
+  | "official_market_open"
+  | "official_market_close"
+  | "informal_market_open"
+  | "informal_market_close";
 
 export type Profile = {
   id: string;
@@ -75,7 +79,7 @@ export type Subscription = {
   user_id: string;
   mercado_pago_payment_id: string | null;
   status: "pending" | "active" | "paused" | "cancelled" | "expired";
-  plan: "free" | "premium_monthly";
+  plan: "free" | "essential_monthly" | "tracking_monthly" | "premium_monthly";
   started_at: string | null;
   expires_at: string | null;
 };

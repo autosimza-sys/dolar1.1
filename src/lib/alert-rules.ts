@@ -18,6 +18,24 @@ function absVariation(rate: Rate | undefined) {
   return Math.abs(rate?.variation ?? 0);
 }
 
+function buenosAiresNow() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+}
+
+function isWeekday(date: Date) {
+  const day = date.getDay();
+  return day >= 1 && day <= 5;
+}
+
+function isInsideMinuteWindow(hour: number, minute = 0, windowMinutes = 10) {
+  const now = buenosAiresNow();
+  if (!isWeekday(now)) return false;
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const targetMinutes = hour * 60 + minute;
+  return currentMinutes >= targetMinutes && currentMinutes < targetMinutes + windowMinutes;
+}
+
 export function evaluateAlert(alert: UserAlert, rates: Rate[]): AlertEvaluation {
   const rate = getRate(rates, alert.rate_code);
   const blue = getRate(rates, "USD_BLUE");
@@ -26,6 +44,11 @@ export function evaluateAlert(alert: UserAlert, rates: Rate[]): AlertEvaluation 
   const condition = alert.condition_type as AlertCondition;
   const target = Number(alert.target_value);
   const message = ALERT_MESSAGES[condition] ?? "Hoy hay movimiento importante. No llegues tarde.";
+
+  if (condition === "official_market_open") return { shouldSend: isInsideMinuteWindow(10), message };
+  if (condition === "official_market_close") return { shouldSend: isInsideMinuteWindow(15), message };
+  if (condition === "informal_market_open") return { shouldSend: isInsideMinuteWindow(11), message };
+  if (condition === "informal_market_close") return { shouldSend: isInsideMinuteWindow(16), message };
 
   if (!rate) return { shouldSend: false, message };
 

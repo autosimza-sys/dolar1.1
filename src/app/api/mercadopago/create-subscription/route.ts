@@ -3,8 +3,54 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+type PlanId = "essential_monthly" | "tracking_monthly" | "premium_monthly";
+
+const planCatalog: Record<
+  PlanId,
+  {
+    title: string;
+    description: string;
+    defaultPrice: number;
+    envPrice?: string;
+    preapprovalEnv?: string;
+  }
+> = {
+  essential_monthly: {
+    title: "Dólar MZA Esencial mensual",
+    description: "1 alerta personalizada por email y 7 días gratis cuando la suscripción está configurada.",
+    defaultPrice: 500,
+    envPrice: process.env.ESSENTIAL_MONTHLY_PRICE,
+    preapprovalEnv: process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_ESSENTIAL_ID
+  },
+  tracking_monthly: {
+    title: "Dólar MZA Seguimiento mensual",
+    description: "Hasta 4 alertas por email y 7 días gratis cuando la suscripción está configurada.",
+    defaultPrice: 1500,
+    envPrice: process.env.TRACKING_MONTHLY_PRICE,
+    preapprovalEnv: process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_TRACKING_ID
+  },
+  premium_monthly: {
+    title: "Dólar MZA Premium mensual",
+    description: "Alertas ilimitadas por email, hasta 6 alertas por WhatsApp y avisos prioritarios.",
+    defaultPrice: 35000,
+    envPrice: process.env.PREMIUM_MONTHLY_PRICE,
+    preapprovalEnv: process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_PREMIUM_ID ?? process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_ID
+  }
+};
+
 function appUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+}
+
+function normalizePlan(plan?: string): PlanId {
+  if (plan === "essential_monthly" || plan === "tracking_monthly" || plan === "premium_monthly") return plan;
+  return "tracking_monthly";
+}
+
+function planPrice(plan: PlanId) {
+  const config = planCatalog[plan];
+  const configuredPrice = Number(config.envPrice);
+  return Number.isFinite(configuredPrice) && configuredPrice > 0 ? configuredPrice : config.defaultPrice;
 }
 
 export async function POST(request: NextRequest) {
@@ -23,13 +69,13 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user?.email) {
-    return NextResponse.json({ error: "Iniciá sesión para activar Premium." }, { status: 401 });
+    return NextResponse.json({ error: "Iniciá sesión para activar una membresía." }, { status: 401 });
   }
 
   const body = (await request.json().catch(() => ({}))) as { plan?: string };
-  const plan = body.plan === "premium_monthly" ? "premium_monthly" : "premium_monthly";
-  const price = Number(process.env.PREMIUM_MONTHLY_PRICE ?? 3500);
-  const preapprovalPlanId = process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_ID;
+  const plan = normalizePlan(body.plan);
+  const config = planCatalog[plan];
+  const preapprovalPlanId = config.preapprovalEnv;
 
   const endpoint = preapprovalPlanId
     ? "https://api.mercadopago.com/preapproval"
@@ -38,20 +84,21 @@ export async function POST(request: NextRequest) {
   const payload = preapprovalPlanId
     ? {
         preapproval_plan_id: preapprovalPlanId,
-        reason: "Dólar Mendoza Premium",
+        reason: config.title,
         external_reference: user.id,
         payer_email: user.email,
+        metadata: { user_id: user.id, plan },
         back_url: `${appUrl()}/account`,
         status: "pending"
       }
     : {
         items: [
           {
-            title: "Dólar Mendoza Premium mensual",
-            description: "Alertas ilimitadas, WhatsApp, resumen diario y señales de oportunidad.",
+            title: config.title,
+            description: config.description,
             quantity: 1,
             currency_id: "ARS",
-            unit_price: price
+            unit_price: planPrice(plan)
           }
         ],
         payer: { email: user.email },

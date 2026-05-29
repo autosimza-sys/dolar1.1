@@ -11,6 +11,7 @@ import { useAccount, useRates } from "@/lib/hooks";
 import type { AlertCondition, Channel } from "@/lib/types";
 
 type ValueKind = "price" | "percent";
+type ActivePlan = "free" | "essential_monthly" | "tracking_monthly" | "premium_monthly";
 
 function getAlertDefinition(value: AlertCondition) {
   return ALERT_TYPES.find((type) => type.value === value) ?? ALERT_TYPES[0];
@@ -18,6 +19,16 @@ function getAlertDefinition(value: AlertCondition) {
 
 function suggestedValueKind(definition: ReturnType<typeof getAlertDefinition>): ValueKind {
   return definition.targetSuffix === "%" ? "percent" : "price";
+}
+
+function isScheduleDefinition(definition: ReturnType<typeof getAlertDefinition>) {
+  return definition.targetSuffix === "hora";
+}
+
+function alertLimitForPlan(plan: ActivePlan) {
+  if (plan === "tracking_monthly") return 4;
+  if (plan === "premium_monthly") return Infinity;
+  return 1;
 }
 
 export function AlertBuilder() {
@@ -39,6 +50,9 @@ export function AlertBuilder() {
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
+  const isScheduleAlert = isScheduleDefinition(definition);
+  const activePlan: ActivePlan =
+    account.subscription?.status === "active" ? account.subscription.plan : account.isPremium ? "premium_monthly" : "free";
 
   useEffect(() => {
     if (!initialRate) {
@@ -46,6 +60,9 @@ export function AlertBuilder() {
     }
 
     setValueKind(suggestedValueKind(definition));
+    if (isScheduleDefinition(definition)) {
+      setTargetValue("");
+    }
   }, [definition, initialRate]);
 
   const valueSuffix = valueKind === "percent" ? "%" : "$";
@@ -67,12 +84,13 @@ export function AlertBuilder() {
     }
 
     const activeAlerts = account.alerts.filter((alert) => alert.is_active);
-    if (!account.isPremium && activeAlerts.length >= 1) {
-      setNotice("El plan gratis incluye 1 alerta activa. Premium libera alertas ilimitadas.");
+    const activeAlertLimit = alertLimitForPlan(activePlan);
+    if (activeAlerts.length >= activeAlertLimit) {
+      setNotice(activePlan === "tracking_monthly" ? "Tu plan Seguimiento incluye hasta 4 alertas activas." : "Este plan incluye 1 alerta activa.");
       return;
     }
 
-    if (!account.isPremium && channel === "whatsapp") {
+    if (activePlan !== "premium_monthly" && channel === "whatsapp") {
       setNotice("WhatsApp está incluido en Premium.");
       return;
     }
@@ -82,7 +100,7 @@ export function AlertBuilder() {
       user_id: account.user.id,
       rate_code: rateCode,
       condition_type: condition,
-      target_value: Number(targetValue),
+      target_value: isScheduleAlert ? 0 : Number(targetValue),
       channel,
       is_active: true
     });
@@ -190,46 +208,55 @@ export function AlertBuilder() {
         <div className="builder-step builder-step--inline">
           <div className="step-title">
             <span>3</span>
-            <strong>Precio o porcentaje</strong>
+            <strong>{isScheduleAlert ? "Horario" : "Precio o porcentaje"}</strong>
           </div>
 
-          <div className="value-kind-grid" aria-label="Tipo de valor">
-            <button
-              className={`value-kind-button ${valueKind === "price" ? "is-selected" : ""}`}
-              type="button"
-              onClick={() => setValueKind("price")}
-            >
-              <DollarSign size={17} />
-              Precio $
-            </button>
-            <button
-              className={`value-kind-button ${valueKind === "percent" ? "is-selected" : ""}`}
-              type="button"
-              onClick={() => setValueKind("percent")}
-            >
-              <Percent size={17} />
-              Porcentaje %
-            </button>
-          </div>
+          {isScheduleAlert ? (
+            <div className="schedule-alert-note">
+              <strong>No necesitás cargar precio.</strong>
+              <span>Te avisamos automáticamente en el horario elegido.</span>
+            </div>
+          ) : (
+            <>
+              <div className="value-kind-grid" aria-label="Tipo de valor">
+                <button
+                  className={`value-kind-button ${valueKind === "price" ? "is-selected" : ""}`}
+                  type="button"
+                  onClick={() => setValueKind("price")}
+                >
+                  <DollarSign size={17} />
+                  Precio $
+                </button>
+                <button
+                  className={`value-kind-button ${valueKind === "percent" ? "is-selected" : ""}`}
+                  type="button"
+                  onClick={() => setValueKind("percent")}
+                >
+                  <Percent size={17} />
+                  Porcentaje %
+                </button>
+              </div>
 
-          <label className="target-input">
-            <SlidersHorizontal size={18} />
-            <input
-              inputMode="decimal"
-              min="0"
-              placeholder={valuePlaceholder}
-              required
-              step="0.01"
-              type="number"
-              value={targetValue}
-              onChange={(event) => setTargetValue(event.target.value)}
-            />
-            <em>{valueSuffix}</em>
-          </label>
-          <small className="input-example">{valueExample}</small>
-          <p className="step-helper">
-            Usá porcentaje para alertas de tasas de interés. Usá precio en pesos para alertas de monedas o tipos de cambio.
-          </p>
+              <label className="target-input">
+                <SlidersHorizontal size={18} />
+                <input
+                  inputMode="decimal"
+                  min="0"
+                  placeholder={valuePlaceholder}
+                  required
+                  step="0.01"
+                  type="number"
+                  value={targetValue}
+                  onChange={(event) => setTargetValue(event.target.value)}
+                />
+                <em>{valueSuffix}</em>
+              </label>
+              <small className="input-example">{valueExample}</small>
+              <p className="step-helper">
+                Usá porcentaje para alertas de tasas de interés. Usá precio en pesos para alertas de monedas o tipos de cambio.
+              </p>
+            </>
+          )}
         </div>
 
         <div className="builder-step builder-step--channel">

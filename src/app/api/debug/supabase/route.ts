@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
       name: "Debug automatizacion",
       country: "test",
       flag: "",
-      type: "debug",
+      type: "indicator",
       buy_price: null,
       sell_price: null,
       variation: 0,

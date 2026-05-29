@@ -152,7 +152,17 @@ export function useAccount() {
     if (!supabase) return;
 
     void reload();
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (
+        event === "PASSWORD_RECOVERY" &&
+        typeof window !== "undefined" &&
+        !window.location.pathname.startsWith("/reset-password")
+      ) {
+        const recoveryParams = window.location.hash || window.location.search || "";
+        window.location.replace(`/reset-password${recoveryParams}`);
+        return;
+      }
+
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
       void loadUserData(nextSession?.user ?? null);
@@ -176,8 +186,11 @@ export function useAccount() {
 }
 
 export function getAdminEmails() {
-  return (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
+  const defaultAdminEmails = ["autosimza@gmail.com", "admin@dolarmendoza.app"];
+  const configured = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
     .split(",")
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean);
+
+  return configured.length ? configured : defaultAdminEmails;
 }

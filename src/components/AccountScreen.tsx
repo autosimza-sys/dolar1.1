@@ -2,12 +2,12 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Crown, LogOut, Pencil, Star, Trash2 } from "lucide-react";
+import { Bell, Crown, LogOut, Pencil, ShieldCheck, Star, Trash2 } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_TYPES } from "@/lib/constants";
 import { formatDateTime, formatMoney } from "@/lib/format";
-import { useAccount, useRates } from "@/lib/hooks";
+import { getAdminEmails, useAccount, useRates } from "@/lib/hooks";
 import type { AlertLog, UserAlert } from "@/lib/types";
 
 function alertLabel(alert: UserAlert) {
@@ -19,11 +19,27 @@ function spreadLabel(buy: number | null, sell: number | null) {
   return `Spread ${formatMoney(sell - buy, true)}`;
 }
 
+function subscriptionLabel(plan?: string, status?: string, isPremium?: boolean) {
+  if (status !== "active" && !isPremium) return "Gratis";
+  if (plan === "essential_monthly") return "Esencial";
+  if (plan === "tracking_monthly") return "Seguimiento";
+  if (plan === "premium_monthly" || isPremium) return "Premium";
+  return "Gratis";
+}
+
+function parseAdminEmails(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item).trim().toLowerCase()).filter(Boolean);
+}
+
 export function AccountScreen() {
   const account = useAccount();
   const { data: rates } = useRates();
   const [logs, setLogs] = useState<AlertLog[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const planLabel = subscriptionLabel(account.subscription?.plan, account.subscription?.status, account.isPremium);
+  const adminEmails = useMemo(() => getAdminEmails(), []);
 
   const favoriteCodes = useMemo(() => new Set(account.favorites.map((favorite) => favorite.rate_code)), [account.favorites]);
 
@@ -45,6 +61,37 @@ export function AccountScreen() {
 
     void loadLogs();
   }, [account.supabase, account.user]);
+
+  useEffect(() => {
+    async function checkAdminAccess() {
+      const email = account.user?.email?.toLowerCase() ?? "";
+
+      if (!email) {
+        setIsAdmin(false);
+        return;
+      }
+
+      if (adminEmails.includes(email)) {
+        setIsAdmin(true);
+        return;
+      }
+
+      if (!account.supabase) {
+        setIsAdmin(false);
+        return;
+      }
+
+      const { data } = await account.supabase
+        .from("admin_settings")
+        .select("value")
+        .eq("key", "admin_emails")
+        .maybeSingle();
+
+      setIsAdmin(parseAdminEmails(data?.value).includes(email));
+    }
+
+    void checkAdminAccess();
+  }, [account.supabase, account.user, adminEmails]);
 
   async function signOut() {
     if (!account.supabase) return;
@@ -117,7 +164,7 @@ export function AccountScreen() {
         <div>
           <p className="eyebrow">Cuenta</p>
           <h1>{account.profile?.full_name || account.user.email}</h1>
-          <span className={account.isPremium ? "status status--premium" : "status"}>{account.isPremium ? "Premium" : "Gratis"}</span>
+          <span className={planLabel !== "Gratis" ? "status status--premium" : "status"}>{planLabel}</span>
         </div>
         <button className="icon-button" aria-label="Salir" type="button" onClick={signOut}>
           <LogOut size={20} />
@@ -125,6 +172,19 @@ export function AccountScreen() {
       </section>
 
       {message ? <p className="notice">{message}</p> : null}
+
+      {isAdmin ? (
+        <section className="admin-access-strip">
+          <div>
+            <strong>Administracion</strong>
+            <span>Panel privado para cotizaciones, fuentes y comunidad.</span>
+          </div>
+          <Link className="button button--ghost" href="/admin">
+            <ShieldCheck size={17} />
+            Panel admin
+          </Link>
+        </section>
+      ) : null}
 
       <section className="section">
         <div className="section-heading">
@@ -238,7 +298,7 @@ export function AccountScreen() {
       </section>
 
       <section className="premium-strip">
-        <p>Estado de suscripción: {account.subscription?.status ?? "free"}</p>
+        <p>Estado de suscripción: {planLabel}</p>
         <Link className="button button--premium" href="/premium">
           <Crown size={17} />
           Premium
