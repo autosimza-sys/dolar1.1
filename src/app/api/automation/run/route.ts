@@ -20,6 +20,11 @@ function isAuthorized(request: NextRequest) {
   return Boolean((bearer && secrets.includes(bearer)) || (querySecret && secrets.includes(querySecret)));
 }
 
+function shouldForceProcessing(request: NextRequest) {
+  const value = request.nextUrl.searchParams.get("force")?.toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
 export async function POST(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
@@ -27,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const rates = await updateRatesFromSources();
-    const alerts = await processAlerts();
+    const alerts = await processAlerts({ force: shouldForceProcessing(request) });
 
     return NextResponse.json({
       ok: true,

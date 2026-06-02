@@ -8,6 +8,7 @@ type ProcessAlertsOptions = {
   sendEmails?: boolean;
   dedupeHours?: number;
   maxJobs?: number;
+  force?: boolean;
 };
 
 type QueuedAlert = {
@@ -58,7 +59,8 @@ async function enqueueNotificationJobs(
   alerts: UserAlert[],
   rates: Rate[],
   profiles: Map<string, Profile>,
-  dedupeHours: number
+  dedupeHours: number,
+  force: boolean
 ) {
   const supabase = createSupabaseAdminClient();
   if (!supabase) throw new Error("Falta SUPABASE_SERVICE_ROLE_KEY.");
@@ -89,21 +91,23 @@ async function enqueueNotificationJobs(
       continue;
     }
 
-    const { data: recentJobs } = await supabase
-      .from("notification_jobs")
-      .select("id")
-      .eq("alert_id", alert.id)
-      .in("status", ["pending", "processing", "sent", "skipped"])
-      .gte("created_at", since)
-      .limit(1);
+    if (!force) {
+      const { data: recentSentJobs } = await supabase
+        .from("notification_jobs")
+        .select("id")
+        .eq("alert_id", alert.id)
+        .eq("status", "sent")
+        .gte("processed_at", since)
+        .limit(1);
 
-    if (recentJobs?.length) {
-      diagnostics.push({
-        ...baseDiagnostic,
-        status: "cooldown",
-        reason: `Ya hubo un intento reciente. Se evita repetir durante ${dedupeHours} horas.`
-      });
-      continue;
+      if (recentSentJobs?.length) {
+        diagnostics.push({
+          ...baseDiagnostic,
+          status: "cooldown",
+          reason: `Ya se envio esta alerta recientemente. Se evita repetir durante ${dedupeHours} horas.`
+        });
+        continue;
+      }
     }
 
     const profile = profiles.get(alert.user_id);
@@ -259,6 +263,7 @@ export async function processAlerts(options: ProcessAlertsOptions = {}) {
   const dedupeHours = options.dedupeHours ?? 6;
   const sendEmails = options.sendEmails ?? true;
   const maxJobs = options.maxJobs ?? 25;
+  const force = options.force ?? false;
 
   const [{ data: rateRows, error: ratesError }, { data: alertRows, error: alertsError }] = await Promise.all([
     supabase.from("rates").select("*").eq("is_visible", true),
@@ -277,7 +282,7 @@ export async function processAlerts(options: ProcessAlertsOptions = {}) {
     : { data: [] };
   const profiles = new Map(((profileRows as Profile[] | null) ?? []).map((profile) => [profile.id, profile]));
 
-  const { queued, diagnostics } = await enqueueNotificationJobs(alerts, rates, profiles, dedupeHours);
+  const { queued, diagnostics } = await enqueueNotificationJobs(alerts, rates, profiles, dedupeHours, force);
   const processed = sendEmails ? await processPendingNotificationJobs(maxJobs) : [];
 
   return {

@@ -13,13 +13,18 @@ function isAuthorized(request: NextRequest) {
   return Boolean((bearer && secrets.includes(bearer)) || (querySecret && secrets.includes(querySecret)));
 }
 
+function shouldForceProcessing(request: NextRequest) {
+  const value = request.nextUrl.searchParams.get("force")?.toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
 export async function POST(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
 
   try {
-    const result = await processAlerts();
+    const result = await processAlerts({ force: shouldForceProcessing(request) });
     return NextResponse.json({
       ok: true,
       checked: result.checked,
