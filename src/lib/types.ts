@@ -170,3 +170,18 @@ export type CommunityReport = {
   include_in_stats: boolean;
   created_at: string;
 };
+
+export type AnalyticsEvent = {
+  id: string;
+  event_name: string;
+  path: string;
+  referrer: string | null;
+  device: string | null;
+  browser: string | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  source: string | null;
+  campaign: string | null;
+  created_at: string;
+};

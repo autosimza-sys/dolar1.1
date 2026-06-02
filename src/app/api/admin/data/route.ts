@@ -81,6 +81,12 @@ export async function GET() {
     supabaseAdmin.from("admin_settings").select("value").eq("key", "community_filters_enabled").maybeSingle()
   ]);
 
+  const analyticsEvents = await supabaseAdmin
+    .from("analytics_events")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(300);
+
   const firstError =
     rates.error ??
     profiles.error ??
@@ -110,7 +116,22 @@ export async function GET() {
     rateSources: rateSources.data ?? [],
     sourceReadings: sourceReadings.data ?? [],
     communityReports: communityReports.data ?? [],
+    analyticsEvents: analyticsEvents.error ? [] : (analyticsEvents.data ?? []),
     blueMendozaManual: blueMendozaManual.data?.value ?? null,
-    communityFiltersEnabled: communityFilters.data?.value !== false
+    communityFiltersEnabled: communityFilters.data?.value !== false,
+    systemStatus: {
+      supabase: true,
+      resend: Boolean(process.env.RESEND_API_KEY && process.env.ALERT_FROM_EMAIL),
+      mercadoPago: Boolean(process.env.MERCADO_PAGO_ACCESS_TOKEN),
+      mercadoPagoWebhook: Boolean(process.env.MERCADO_PAGO_WEBHOOK_SECRET),
+      cron: Boolean(
+        process.env.AUTOMATION_SECRET ||
+          process.env.CRON_SECRET ||
+          process.env.RATES_UPDATE_SECRET ||
+          process.env.ALERTS_CRON_SECRET
+      ),
+      appUrl: Boolean(process.env.NEXT_PUBLIC_APP_URL),
+      analytics: !analyticsEvents.error
+    }
   });
 }
