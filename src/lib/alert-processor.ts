@@ -34,20 +34,15 @@ async function enqueueNotificationJobs(
     const evaluation = evaluateAlert(alert, rates);
     if (!evaluation.shouldSend) continue;
 
-    const { data: recentLogs } = await supabase
-      .from("alert_logs")
+    const { data: recentJobs } = await supabase
+      .from("notification_jobs")
       .select("id")
       .eq("alert_id", alert.id)
-      .gte("sent_at", since)
+      .in("status", ["pending", "processing", "sent", "skipped"])
+      .gte("created_at", since)
       .limit(1);
 
-    if (recentLogs?.length) continue;
-
-    await supabase.from("alert_logs").insert({
-      alert_id: alert.id,
-      user_id: alert.user_id,
-      message: evaluation.message
-    });
+    if (recentJobs?.length) continue;
 
     const profile = profiles.get(alert.user_id);
     const recipient = alert.channel === "email" ? profile?.email : profile?.phone;
@@ -114,7 +109,7 @@ export async function processPendingNotificationJobs(maxJobs = 25) {
     .from("notification_jobs")
     .select("*")
     .in("status", ["pending", "failed"])
-    .lt("attempts", 3)
+    .lt("attempts", 5)
     .order("created_at", { ascending: true })
     .limit(maxJobs);
 
@@ -143,6 +138,14 @@ export async function processPendingNotificationJobs(maxJobs = 25) {
             processed_at: new Date().toISOString()
           })
           .eq("id", job.id);
+
+        if (status === "sent") {
+          await supabase.from("alert_logs").insert({
+            alert_id: job.alert_id,
+            user_id: job.user_id,
+            message: job.message
+          });
+        }
 
         processed.push({ job_id: job.id, status, error: lastError ?? undefined });
         continue;
