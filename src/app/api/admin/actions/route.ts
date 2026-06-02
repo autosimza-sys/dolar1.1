@@ -64,6 +64,11 @@ function requireString(value: unknown, field: string) {
   return value.trim();
 }
 
+function finiteNumber(value: unknown) {
+  const numberValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
 async function isAdminEmail(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail) return false;
@@ -143,6 +148,32 @@ export async function POST(request: NextRequest) {
         { onConflict: "key" }
       );
       if (error) throw error;
+
+      const payload = body.payload ?? {};
+      const manualEnabled = Boolean(payload.enabled);
+      const buyPrice = finiteNumber(payload.buy_price);
+      const sellPrice = finiteNumber(payload.sell_price);
+
+      if (manualEnabled && (buyPrice !== null || sellPrice !== null)) {
+        const { error: rateError } = await supabaseAdmin.from("rates").upsert(
+          {
+            code: "USD_BLUE_MENDOZA",
+            name: "Dolar Blue Mendoza",
+            country: "Mendoza",
+            flag: "ARUS",
+            type: "main",
+            buy_price: buyPrice,
+            sell_price: sellPrice,
+            variation: 0,
+            source: "Manual admin",
+            is_visible: true,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: "code" }
+        );
+        if (rateError) throw rateError;
+      }
+
       return NextResponse.json({ ok: true, message: "Blue Mendoza manual actualizado." });
     }
 

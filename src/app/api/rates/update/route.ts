@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 function isAuthorized(request: NextRequest) {
-  const secrets = [process.env.CRON_SECRET, process.env.RATES_UPDATE_SECRET, process.env.ALERTS_CRON_SECRET].filter(Boolean);
+  const secrets = [process.env.AUTOMATION_SECRET, process.env.CRON_SECRET, process.env.RATES_UPDATE_SECRET, process.env.ALERTS_CRON_SECRET].filter(Boolean);
   if (!secrets.length) return true;
 
   const bearer = request.headers.get("authorization")?.replace("Bearer ", "");

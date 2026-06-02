@@ -18,6 +18,42 @@ type QueuedAlert = {
   email_status?: string;
 };
 
+type AlertDiagnostic = {
+  alert_id: string;
+  rate_code: string;
+  condition_type: string;
+  channel: string;
+  target_value: number;
+  current_value: number | null;
+  should_send: boolean;
+  status: "not_triggered" | "cooldown" | "missing_recipient" | "queued";
+  reason: string;
+};
+
+function sellValue(rate: Rate | undefined) {
+  return rate?.sell_price ?? rate?.buy_price ?? null;
+}
+
+function alertDiagnosticReason(alert: UserAlert, rates: Rate[]) {
+  const rate = rates.find((item) => item.code === alert.rate_code);
+  const current = sellValue(rate);
+  const target = Number(alert.target_value);
+
+  if (!rate) return "No existe una cotizacion visible para esta alerta.";
+  if (alert.condition_type === "above" && current !== null) return `Valor actual ${current} menor que objetivo ${target}.`;
+  if ((alert.condition_type === "below" || alert.condition_type === "mep_below") && current !== null) {
+    return `Valor actual ${current} mayor que objetivo ${target}.`;
+  }
+  if (alert.condition_type === "rate_up" && current !== null && target > 0) {
+    return `Tasa actual ${current}% menor que objetivo ${target}%.`;
+  }
+  if (alert.condition_type === "rate_down" && current !== null && target > 0) {
+    return `Tasa actual ${current}% mayor que objetivo ${target}%.`;
+  }
+  if (alert.condition_type.includes("market_")) return "Alerta de horario fuera de la ventana actual.";
+  return "La condicion todavia no se cumple.";
+}
+
 async function enqueueNotificationJobs(
   alerts: UserAlert[],
   rates: Rate[],
@@ -29,10 +65,29 @@ async function enqueueNotificationJobs(
 
   const since = new Date(Date.now() - dedupeHours * 60 * 60 * 1000).toISOString();
   const queued: QueuedAlert[] = [];
+  const diagnostics: AlertDiagnostic[] = [];
 
   for (const alert of alerts) {
     const evaluation = evaluateAlert(alert, rates);
-    if (!evaluation.shouldSend) continue;
+    const rate = rates.find((item) => item.code === alert.rate_code);
+    const baseDiagnostic = {
+      alert_id: alert.id,
+      rate_code: alert.rate_code,
+      condition_type: alert.condition_type,
+      channel: alert.channel,
+      target_value: Number(alert.target_value),
+      current_value: sellValue(rate),
+      should_send: evaluation.shouldSend
+    };
+
+    if (!evaluation.shouldSend) {
+      diagnostics.push({
+        ...baseDiagnostic,
+        status: "not_triggered",
+        reason: alertDiagnosticReason(alert, rates)
+      });
+      continue;
+    }
 
     const { data: recentJobs } = await supabase
       .from("notification_jobs")
@@ -42,7 +97,14 @@ async function enqueueNotificationJobs(
       .gte("created_at", since)
       .limit(1);
 
-    if (recentJobs?.length) continue;
+    if (recentJobs?.length) {
+      diagnostics.push({
+        ...baseDiagnostic,
+        status: "cooldown",
+        reason: `Ya hubo un intento reciente. Se evita repetir durante ${dedupeHours} horas.`
+      });
+      continue;
+    }
 
     const profile = profiles.get(alert.user_id);
     const recipient = alert.channel === "email" ? profile?.email : profile?.phone;
@@ -70,6 +132,11 @@ async function enqueueNotificationJobs(
         job_id: job?.id,
         email_status: "sin destinatario"
       });
+      diagnostics.push({
+        ...baseDiagnostic,
+        status: "missing_recipient",
+        reason: alert.channel === "email" ? "El usuario no tiene email en profile." : "El usuario no tiene WhatsApp configurado."
+      });
       continue;
     }
 
@@ -96,9 +163,14 @@ async function enqueueNotificationJobs(
       email: alert.channel === "email" ? recipient : undefined,
       email_status: alert.channel === "email" ? "pendiente" : undefined
     });
+    diagnostics.push({
+      ...baseDiagnostic,
+      status: "queued",
+      reason: alert.channel === "email" ? "Email encolado para enviar." : "WhatsApp encolado, proveedor pendiente."
+    });
   }
 
-  return queued;
+  return { queued, diagnostics };
 }
 
 export async function processPendingNotificationJobs(maxJobs = 25) {
@@ -205,12 +277,13 @@ export async function processAlerts(options: ProcessAlertsOptions = {}) {
     : { data: [] };
   const profiles = new Map(((profileRows as Profile[] | null) ?? []).map((profile) => [profile.id, profile]));
 
-  const queued = await enqueueNotificationJobs(alerts, rates, profiles, dedupeHours);
+  const { queued, diagnostics } = await enqueueNotificationJobs(alerts, rates, profiles, dedupeHours);
   const processed = sendEmails ? await processPendingNotificationJobs(maxJobs) : [];
 
   return {
     checked: alerts.length,
     queued,
-    processed
+    processed,
+    diagnostics
   };
 }

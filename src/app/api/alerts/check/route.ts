@@ -24,7 +24,8 @@ export async function POST(request: NextRequest) {
       ok: true,
       checked: result.checked,
       queued: result.queued,
-      processed: result.processed
+      processed: result.processed,
+      diagnostics: result.diagnostics
     });
   } catch (error) {
     return NextResponse.json(

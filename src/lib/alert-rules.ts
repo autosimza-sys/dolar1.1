@@ -62,8 +62,8 @@ export function evaluateAlert(alert: UserAlert, rates: Rate[]): AlertEvaluation 
     return { shouldSend: gap >= target, message };
   }
 
-  if (condition === "rate_up") return { shouldSend: (rate.variation ?? 0) > 0, message };
-  if (condition === "rate_down") return { shouldSend: (rate.variation ?? 0) < 0, message };
+  if (condition === "rate_up") return { shouldSend: target > 0 ? sell(rate) >= target : (rate.variation ?? 0) > 0, message };
+  if (condition === "rate_down") return { shouldSend: target > 0 ? sell(rate) <= target : (rate.variation ?? 0) < 0, message };
   if (condition === "fixed_term_better") return { shouldSend: sell(rate) >= target, message };
   if (condition === "dollar_vs_fixed_term") return { shouldSend: absVariation(blue) >= target || sell(rate) >= target, message };
   if (condition === "travel_opportunity") return { shouldSend: absVariation(rate) >= target, message };
