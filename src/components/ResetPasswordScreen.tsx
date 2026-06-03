@@ -2,24 +2,38 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, Lock } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Lock } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-const recoveryStorageKey = "dolar_mza_password_recovery";
+const recoverySessionKey = "dolar_mza_password_recovery";
+const recoveryPendingKey = "dolar_mza_password_recovery_pending";
+const recoveryWindowMs = 2 * 60 * 60 * 1000;
 
 function getFriendlyResetError(message: string) {
   const normalized = message.toLowerCase();
 
   if (normalized.includes("session") || normalized.includes("token") || normalized.includes("expired")) {
-    return "El enlace vencio o no es valido. Volve a solicitar la recuperacion de contrasenia.";
+    return "El enlace venció o no es válido. Volvé a solicitar la recuperación.";
   }
 
   if (normalized.includes("password")) {
-    return "La contrasenia debe tener al menos 6 caracteres.";
+    return "La contraseña debe tener al menos 6 caracteres.";
   }
 
-  return "No pudimos guardar la nueva contrasenia. Pedi otro enlace e intenta de nuevo.";
+  return "No pudimos actualizar la contraseña. Intentá nuevamente.";
+}
+
+function hasRecentRecoveryPending() {
+  if (typeof window === "undefined") return false;
+
+  try {
+    const raw = window.localStorage.getItem(recoveryPendingKey);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { createdAt?: number };
+    return typeof parsed.createdAt === "number" && Date.now() - parsed.createdAt < recoveryWindowMs;
+  } catch {
+    return false;
+  }
 }
 
 function hasRecoveryHash() {
@@ -28,12 +42,18 @@ function hasRecoveryHash() {
   return hash.includes("type=recovery") || hash.includes("access_token") || hash.includes("refresh_token");
 }
 
+function clearRecoveryMarkers() {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(recoverySessionKey);
+  window.localStorage.removeItem(recoveryPendingKey);
+}
+
 export function ResetPasswordScreen() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [canReset, setCanReset] = useState(false);
@@ -44,7 +64,7 @@ export function ResetPasswordScreen() {
     async function waitForSession() {
       if (!supabase) return false;
 
-      for (let attempt = 0; attempt < 6; attempt += 1) {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
         const { data } = await supabase.auth.getSession();
         if (data.session) return true;
         await new Promise((resolve) => setTimeout(resolve, 250));
@@ -55,21 +75,26 @@ export function ResetPasswordScreen() {
 
     async function prepareSession() {
       if (!supabase) {
-        setMessage("La conexion con Supabase no esta configurada.");
+        setMessage("La conexión con Supabase no está configurada.");
         setIsReady(true);
         return;
       }
 
-      const code = searchParams.get("code");
-      const type = searchParams.get("type");
-      const hasRecoveryMarker =
-        type === "recovery" ||
-        Boolean(code) ||
-        hasRecoveryHash() ||
-        (typeof window !== "undefined" && window.sessionStorage.getItem(recoveryStorageKey) === "1");
+      const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+      const code = params.get("code");
+      const type = params.get("type");
+      const hasSessionMarker = typeof window !== "undefined" && window.sessionStorage.getItem(recoverySessionKey) === "1";
+      const hasRecoveryMarker = type === "recovery" || Boolean(code) || hasRecoveryHash() || hasSessionMarker || hasRecentRecoveryPending();
 
-      if (hasRecoveryMarker && typeof window !== "undefined") {
-        window.sessionStorage.setItem(recoveryStorageKey, "1");
+      if (!hasRecoveryMarker) {
+        setMessage("Abrí esta pantalla desde el correo de recuperación para cambiar tu contraseña.");
+        setCanReset(false);
+        setIsReady(true);
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(recoverySessionKey, "1");
       }
 
       if (code) {
@@ -85,11 +110,7 @@ export function ResetPasswordScreen() {
       const sessionReady = await waitForSession();
 
       if (!sessionReady) {
-        setMessage(
-          hasRecoveryMarker
-            ? "El enlace vencio o no es valido. Volve a solicitar la recuperacion de contrasenia."
-            : "Abri esta pantalla desde el correo de recuperacion para cambiar tu contrasenia."
-        );
+        setMessage("El enlace venció o no es válido. Volvé a solicitar la recuperación.");
         setCanReset(false);
         setIsReady(true);
         return;
@@ -105,48 +126,46 @@ export function ResetPasswordScreen() {
     }
 
     void prepareSession();
-  }, [searchParams, supabase]);
+  }, [supabase]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
 
     if (!supabase) {
-      setMessage("La conexion con Supabase no esta configurada.");
+      setMessage("La conexión con Supabase no está configurada.");
       return;
     }
 
     if (!canReset) {
-      setMessage("El enlace vencio o no es valido. Volve a solicitar la recuperacion de contrasenia.");
+      setMessage("El enlace venció o no es válido. Volvé a solicitar la recuperación.");
       return;
     }
 
     if (password.length < 6) {
-      setMessage("La contrasenia debe tener al menos 6 caracteres.");
+      setMessage("La contraseña debe tener al menos 6 caracteres.");
       return;
     }
 
     if (password !== confirmPassword) {
-      setMessage("Las contrasenias no coinciden.");
+      setMessage("Las contraseñas no coinciden.");
       return;
     }
 
     setIsSaving(true);
     const { error } = await supabase.auth.updateUser({ password });
-    setIsSaving(false);
 
     if (error) {
+      setIsSaving(false);
       setMessage(getFriendlyResetError(error.message));
       return;
     }
 
-    if (typeof window !== "undefined") {
-      window.sessionStorage.removeItem(recoveryStorageKey);
-    }
-
+    await supabase.auth.signOut();
+    clearRecoveryMarkers();
+    setIsSaving(false);
     setIsDone(true);
-    setMessage("Tu contrasenia fue actualizada correctamente.");
-    setTimeout(() => router.push("/account"), 1600);
+    setMessage("Tu contraseña fue actualizada correctamente.");
   }
 
   return (
@@ -154,7 +173,7 @@ export function ResetPasswordScreen() {
       <section className="page-header">
         <p className="eyebrow">Cuenta</p>
         <h1>Crear nueva contraseña</h1>
-        <p>Elegí una contraseña segura para volver a ingresar a Dólar MZA.</p>
+        <p>Elegí una nueva contraseña para volver a ingresar a tu cuenta.</p>
       </section>
 
       <form className="panel auth-form" onSubmit={handleSubmit}>
@@ -162,7 +181,10 @@ export function ResetPasswordScreen() {
           <div className="auth-state">
             <CheckCircle2 size={34} />
             <h2>Tu contraseña fue actualizada correctamente.</h2>
-            <p>Te estamos llevando a tu cuenta.</p>
+            <p>Ya podés iniciar sesión con tu nueva contraseña.</p>
+            <Link className="button button--full" href="/account">
+              Iniciar sesión
+            </Link>
           </div>
         ) : (
           <>
@@ -175,10 +197,19 @@ export function ResetPasswordScreen() {
                   disabled={!isReady || !canReset}
                   minLength={6}
                   required
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                 />
+                <button
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  className="password-toggle"
+                  disabled={!isReady || !canReset}
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </label>
 
@@ -191,10 +222,19 @@ export function ResetPasswordScreen() {
                   disabled={!isReady || !canReset}
                   minLength={6}
                   required
-                  type="password"
+                  type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
                 />
+                <button
+                  aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  className="password-toggle"
+                  disabled={!isReady || !canReset}
+                  type="button"
+                  onClick={() => setShowConfirmPassword((current) => !current)}
+                >
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </label>
 

@@ -1368,8 +1368,37 @@ input:focus {
 
 .field__control input {
   border: 0;
+  flex: 1;
   min-height: 46px;
+  min-width: 0;
   padding: 0;
+}
+
+.password-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--gray-text);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 36px;
+  justify-content: center;
+  padding: 0;
+  width: 36px;
+}
+
+.password-toggle:hover {
+  color: var(--green);
+}
+
+.password-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.password-toggle:focus-visible {
+  outline: 1px solid var(--green);
+  outline-offset: 2px;
 }
 
 .field--tight input,

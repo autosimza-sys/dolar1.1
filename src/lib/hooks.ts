@@ -6,12 +6,43 @@ import { demoEducationCards, demoRates } from "@/lib/demo-data";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { EducationCard, FavoriteRate, Profile, Rate, Subscription, UserAlert } from "@/lib/types";
 
+const recoverySessionKey = "dolar_mza_password_recovery";
+const recoveryPendingKey = "dolar_mza_password_recovery_pending";
+const recoveryPendingWindowMs = 2 * 60 * 60 * 1000;
+
 type LoadState<T> = {
   data: T;
   isLoading: boolean;
   error: string | null;
   reload: () => Promise<void>;
 };
+
+function hasRecentPasswordRecoveryPending() {
+  if (typeof window === "undefined") return false;
+
+  try {
+    const raw = window.localStorage.getItem(recoveryPendingKey);
+    if (!raw) return false;
+
+    const parsed = JSON.parse(raw) as { createdAt?: number };
+    return typeof parsed.createdAt === "number" && Date.now() - parsed.createdAt < recoveryPendingWindowMs;
+  } catch {
+    return false;
+  }
+}
+
+function isPasswordRecoveryRedirect() {
+  if (typeof window === "undefined") return false;
+
+  const hash = window.location.hash.toLowerCase();
+  const search = window.location.search.toLowerCase();
+  const hasRecoveryType = hash.includes("type=recovery") || search.includes("type=recovery");
+  const hasRecoveryToken = hash.includes("access_token") || hash.includes("refresh_token") || search.includes("code=");
+  const hasRecoveryMarker =
+    window.sessionStorage.getItem(recoverySessionKey) === "1" || hasRecentPasswordRecoveryPending();
+
+  return hasRecoveryType || (hasRecoveryMarker && hasRecoveryToken);
+}
 
 export function useSupabase() {
   return useMemo(() => createSupabaseBrowserClient(), []);
@@ -154,13 +185,10 @@ export function useAccount() {
     if (
       typeof window !== "undefined" &&
       !window.location.pathname.startsWith("/reset-password") &&
-      (window.location.hash.toLowerCase().includes("type=recovery") ||
-        window.location.hash.toLowerCase().includes("access_token") ||
-        window.location.search.toLowerCase().includes("type=recovery") ||
-        window.location.search.toLowerCase().includes("code="))
+      isPasswordRecoveryRedirect()
     ) {
       const recoveryParams = `${window.location.search || ""}${window.location.hash || ""}`;
-      window.sessionStorage.setItem("dolar_mza_password_recovery", "1");
+      window.sessionStorage.setItem(recoverySessionKey, "1");
       window.location.replace(`/reset-password${recoveryParams}`);
       return;
     }
@@ -172,8 +200,8 @@ export function useAccount() {
         typeof window !== "undefined" &&
         !window.location.pathname.startsWith("/reset-password")
       ) {
-        const recoveryParams = window.location.hash || window.location.search || "";
-        window.sessionStorage.setItem("dolar_mza_password_recovery", "1");
+        const recoveryParams = `${window.location.search || ""}${window.location.hash || ""}`;
+        window.sessionStorage.setItem(recoverySessionKey, "1");
         window.location.replace(`/reset-password${recoveryParams}`);
         return;
       }
