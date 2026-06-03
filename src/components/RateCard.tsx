@@ -42,7 +42,7 @@ export function RateCard({ rate }: { rate: Rate }) {
           <Clock3 size={14} />
           {formatDateTime(rate.updated_at)}
         </span>
-        <Link className="button button--small" href={`/alerts?rate=${rate.code}`}>
+        <Link className="button button--small button--alert" href={`/alerts?rate=${rate.code}`}>
           <Bell size={16} />
           Crear alerta
         </Link>

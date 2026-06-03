@@ -144,9 +144,9 @@ export function CookieConsent() {
       <div className="cookie-consent__copy">
         <strong>Preferencias de cookies</strong>
         <p>
-          Usamos cookies y datos de navegación para mejorar la experiencia, medir visitas, conocer desde qué zonas se usa
-          la plataforma y mejorar nuestras alertas y servicios. No vendemos tus datos ni mostramos información personal
-          públicamente.
+          Usamos cookies y datos de navegacion para mejorar la experiencia, medir visitas, conocer desde que zonas se usa
+          la plataforma y mejorar nuestras alertas y servicios. No vendemos tus datos ni mostramos informacion personal
+          publicamente.
         </p>
       </div>
 
@@ -166,8 +166,8 @@ export function CookieConsent() {
               onChange={(event) => setDraft((current) => ({ ...current, analytics: event.target.checked }))}
             />
             <span>
-              <strong>Analítica</strong>
-              Visitas, páginas, dispositivo y ciudad/provincia aproximada.
+              <strong>Analitica</strong>
+              Visitas, paginas, dispositivo y ciudad/provincia aproximada.
             </span>
           </label>
           <label>
@@ -178,7 +178,7 @@ export function CookieConsent() {
             />
             <span>
               <strong>Marketing</strong>
-              Conversiones, visitas a Premium y campañas.
+              Conversiones, visitas a Premium y campanias.
             </span>
           </label>
         </div>

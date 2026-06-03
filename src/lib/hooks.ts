@@ -151,6 +151,20 @@ export function useAccount() {
   useEffect(() => {
     if (!supabase) return;
 
+    if (
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/reset-password") &&
+      (window.location.hash.toLowerCase().includes("type=recovery") ||
+        window.location.hash.toLowerCase().includes("access_token") ||
+        window.location.search.toLowerCase().includes("type=recovery") ||
+        window.location.search.toLowerCase().includes("code="))
+    ) {
+      const recoveryParams = `${window.location.search || ""}${window.location.hash || ""}`;
+      window.sessionStorage.setItem("dolar_mza_password_recovery", "1");
+      window.location.replace(`/reset-password${recoveryParams}`);
+      return;
+    }
+
     void reload();
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (
@@ -159,6 +173,7 @@ export function useAccount() {
         !window.location.pathname.startsWith("/reset-password")
       ) {
         const recoveryParams = window.location.hash || window.location.search || "";
+        window.sessionStorage.setItem("dolar_mza_password_recovery", "1");
         window.location.replace(`/reset-password${recoveryParams}`);
         return;
       }

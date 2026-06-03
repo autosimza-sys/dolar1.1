@@ -491,7 +491,7 @@ export function AlertBuilder() {
                 <h3>{alert.title}</h3>
                 <p>{alert.description}</p>
               </div>
-              <button className="button button--ghost" disabled={savingQuickId === alert.id} type="button" onClick={() => handleQuickAlert(alert)}>
+              <button className="button button--alert" disabled={savingQuickId === alert.id} type="button" onClick={() => handleQuickAlert(alert)}>
                 {savingQuickId === alert.id ? "Guardando..." : alert.configure ? "Configurar" : "Activar alerta"}
               </button>
             </article>
@@ -656,7 +656,7 @@ export function AlertBuilder() {
           </div>
         ) : null}
 
-        <button className="button button--full button--hero" disabled={isSaving} type="submit">
+        <button className="button button--full button--hero button--alert" disabled={isSaving} type="submit">
           {isSaving ? "Guardando..." : "Guardar alerta"}
           {isSaving ? null : <Check size={19} />}
         </button>

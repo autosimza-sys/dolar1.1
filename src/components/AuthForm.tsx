@@ -39,26 +39,26 @@ function getFriendlyAuthError(message: string) {
   const normalized = message.toLowerCase();
 
   if (isUnconfirmedEmailError(message)) {
-    return "Debés confirmar tu email antes de ingresar.";
+    return "Debes confirmar tu email antes de ingresar.";
   }
 
   if (normalized.includes("invalid login credentials")) {
-    return "El email o la contraseña no son correctos.";
+    return "El email o la contrasenia no son correctos.";
   }
 
   if (normalized.includes("user already registered") || normalized.includes("already registered")) {
-    return "Ese email ya tiene una cuenta. Probá entrando o recuperando la contraseña.";
+    return "Ese email ya tiene una cuenta. Proba entrando o recuperando la contrasenia.";
   }
 
   if (normalized.includes("password")) {
-    return "La contraseña debe tener al menos 6 caracteres.";
+    return "La contrasenia debe tener al menos 6 caracteres.";
   }
 
   if (normalized.includes("rate limit") || normalized.includes("too many")) {
-    return "Hiciste varios intentos seguidos. Esperá unos minutos y probá de nuevo.";
+    return "Hiciste varios intentos seguidos. Espera unos minutos y proba de nuevo.";
   }
 
-  return "No pudimos completar la operación. Revisá los datos e intentá de nuevo.";
+  return "No pudimos completar la operacion. Revisa los datos e intenta de nuevo.";
 }
 
 export function AuthForm({ compact = false, initialMode = "register", onSuccess }: AuthFormProps) {
@@ -85,13 +85,13 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
 
   async function resendConfirmation() {
     if (!supabase) {
-      setMessage("La conexión con Supabase no está configurada.");
+      setMessage("La conexion con Supabase no esta configurada.");
       return;
     }
 
     const targetEmail = (pendingEmail || email).trim().toLowerCase();
     if (!targetEmail) {
-      setMessage("Ingresá tu email para reenviar la confirmación.");
+      setMessage("Ingresa tu email para reenviar la confirmacion.");
       return;
     }
 
@@ -104,11 +104,7 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
       }
     });
 
-    setMessage(
-      error
-        ? getFriendlyAuthError(error.message)
-        : "Te reenviamos el email de confirmación. Revisá bandeja de entrada y spam."
-    );
+    setMessage(error ? getFriendlyAuthError(error.message) : "Te reenviamos el email de confirmacion. Revisa bandeja de entrada y spam.");
     setIsResending(false);
   }
 
@@ -118,7 +114,7 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
     setNeedsConfirmation(false);
 
     if (!supabase) {
-      setMessage("La conexión con Supabase no está configurada.");
+      setMessage("La conexion con Supabase no esta configurada.");
       return;
     }
 
@@ -140,20 +136,18 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
 
       if (error) {
         setMessage(getFriendlyAuthError(error.message));
+      } else if (data.user && data.session) {
+        await supabase.from("profiles").upsert({
+          id: data.user.id,
+          email: cleanEmail,
+          phone: phone || null,
+          full_name: fullName || null
+        });
+        setMessage("Cuenta creada. Ya podes guardar alertas.");
+        onSuccess?.();
       } else {
-        if (data.user && data.session) {
-          await supabase.from("profiles").upsert({
-            id: data.user.id,
-            email: cleanEmail,
-            phone: phone || null,
-            full_name: fullName || null
-          });
-          setMessage("Cuenta creada. Ya podés guardar alertas.");
-          onSuccess?.();
-        } else {
-          setPendingEmail(cleanEmail);
-          setView("check-email");
-        }
+        setPendingEmail(cleanEmail);
+        setView("check-email");
       }
     }
 
@@ -191,16 +185,16 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
     return (
       <div className={`auth-form auth-state ${compact ? "auth-form--compact" : ""}`}>
         <CheckCircle2 size={34} />
-        <h2>Revisá tu email</h2>
+        <h2>Revisa tu email</h2>
         <p>
-          Te enviamos un correo para confirmar tu cuenta. Revisá tu bandeja de entrada o spam y hacé click en el enlace
-          de confirmación para activar tu usuario.
+          Te enviamos un correo para confirmar tu cuenta. Revisa tu bandeja de entrada o spam y hace click en el enlace
+          de confirmacion para activar tu usuario.
         </p>
         <button className="button button--full" disabled={isResending} type="button" onClick={resendConfirmation}>
           <RotateCw size={17} />
-          {isResending ? "Reenviando..." : "Reenviar email de confirmación"}
+          {isResending ? "Reenviando..." : "Reenviar email de confirmacion"}
         </button>
-        <small>Si no encontrás el correo, revisá spam o correo no deseado.</small>
+        <small>Si no encontras el correo, revisa spam o correo no deseado.</small>
         {message ? <p className="form-message">{message}</p> : null}
       </div>
     );
@@ -210,8 +204,8 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
     return (
       <div className={`auth-form auth-state ${compact ? "auth-form--compact" : ""}`}>
         <CheckCircle2 size={34} />
-        <h2>Revisá tu email</h2>
-        <p>Te enviamos un correo para restablecer tu contraseña. Revisá tu bandeja de entrada o spam.</p>
+        <h2>Revisa tu email</h2>
+        <p>Te enviamos un correo para restablecer tu contrasenia. Revisa tu bandeja de entrada o spam.</p>
         <button className="button button--full" type="button" onClick={() => changeMode("login")}>
           Volver al login
         </button>
@@ -224,7 +218,7 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
       {mode === "forgot" ? (
         <div className="auth-copy">
           <h2>Recuperar contraseña</h2>
-          <p>Ingresá tu email y te mandamos un enlace para crear una nueva contraseña.</p>
+          <p>Ingresa tu email y te mandamos un enlace para crear una nueva contraseña.</p>
         </div>
       ) : (
         <div className="segmented">
@@ -293,7 +287,7 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
       {needsConfirmation ? (
         <button className="button button--ghost button--full" disabled={isResending} type="button" onClick={resendConfirmation}>
           <RotateCw size={17} />
-          {isResending ? "Reenviando..." : "Reenviar email de confirmación"}
+          {isResending ? "Reenviando..." : "Reenviar email de confirmacion"}
         </button>
       ) : null}
 
@@ -303,7 +297,7 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
           : mode === "register"
             ? "Crear cuenta gratis"
             : mode === "forgot"
-              ? "Enviar correo de recuperación"
+              ? "Enviar correo de recuperacion"
               : "Entrar"}
       </button>
 

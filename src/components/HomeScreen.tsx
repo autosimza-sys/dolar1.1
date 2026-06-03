@@ -45,7 +45,7 @@ function ArgentinaToday({ rates }: { rates: Rate[] }) {
         <div className="today-panel__footer">
           <span>Última actualización: {formatDateTime(latest)}</span>
           <div className="button-row">
-            <Link className="button button--ghost" href="/alerts?rate=BCRA_RATE">
+            <Link className="button button--alert" href="/alerts?rate=BCRA_RATE">
               <Bell size={17} />
               Crear alerta de tasa
             </Link>

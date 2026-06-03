@@ -6,18 +6,26 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Lock } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
+const recoveryStorageKey = "dolar_mza_password_recovery";
+
 function getFriendlyResetError(message: string) {
   const normalized = message.toLowerCase();
 
   if (normalized.includes("session") || normalized.includes("token") || normalized.includes("expired")) {
-    return "El enlace venció o no es válido. Volvé a solicitar la recuperación de contraseña.";
+    return "El enlace vencio o no es valido. Volve a solicitar la recuperacion de contrasenia.";
   }
 
   if (normalized.includes("password")) {
-    return "La contraseña debe tener al menos 6 caracteres.";
+    return "La contrasenia debe tener al menos 6 caracteres.";
   }
 
-  return "No pudimos guardar la nueva contraseña. Pedí otro enlace e intentá de nuevo.";
+  return "No pudimos guardar la nueva contrasenia. Pedi otro enlace e intenta de nuevo.";
+}
+
+function hasRecoveryHash() {
+  if (typeof window === "undefined") return false;
+  const hash = window.location.hash.toLowerCase();
+  return hash.includes("type=recovery") || hash.includes("access_token") || hash.includes("refresh_token");
 }
 
 export function ResetPasswordScreen() {
@@ -28,43 +36,72 @@ export function ResetPasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [canReset, setCanReset] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDone, setIsDone] = useState(false);
 
   useEffect(() => {
+    async function waitForSession() {
+      if (!supabase) return false;
+
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) return true;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+
+      return false;
+    }
+
     async function prepareSession() {
       if (!supabase) {
-        setMessage("La conexión con Supabase no está configurada.");
+        setMessage("La conexion con Supabase no esta configurada.");
         setIsReady(true);
         return;
       }
 
       const code = searchParams.get("code");
-      const urlLooksLikeRecovery =
-        searchParams.get("type") === "recovery" ||
+      const type = searchParams.get("type");
+      const hasRecoveryMarker =
+        type === "recovery" ||
         Boolean(code) ||
-        (typeof window !== "undefined" && window.location.hash.includes("type=recovery"));
+        hasRecoveryHash() ||
+        (typeof window !== "undefined" && window.sessionStorage.getItem(recoveryStorageKey) === "1");
+
+      if (hasRecoveryMarker && typeof window !== "undefined") {
+        window.sessionStorage.setItem(recoveryStorageKey, "1");
+      }
 
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
           setMessage(getFriendlyResetError(error.message));
-        }
-      } else {
-        const { data } = await supabase.auth.getSession();
-        if (!data.session && urlLooksLikeRecovery) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          const { data: retry } = await supabase.auth.getSession();
-
-          if (!retry.session) {
-            setMessage("El enlace venció o no es válido. Volvé a solicitar la recuperación de contraseña.");
-          }
-        } else if (!data.session) {
-          setMessage("Abrí esta pantalla desde el correo de recuperación para cambiar tu contraseña.");
+          setCanReset(false);
+          setIsReady(true);
+          return;
         }
       }
 
+      const sessionReady = await waitForSession();
+
+      if (!sessionReady) {
+        setMessage(
+          hasRecoveryMarker
+            ? "El enlace vencio o no es valido. Volve a solicitar la recuperacion de contrasenia."
+            : "Abri esta pantalla desde el correo de recuperacion para cambiar tu contrasenia."
+        );
+        setCanReset(false);
+        setIsReady(true);
+        return;
+      }
+
+      setCanReset(true);
+      setMessage(null);
       setIsReady(true);
+
+      if (typeof window !== "undefined" && (window.location.search || window.location.hash)) {
+        window.history.replaceState({}, "", "/reset-password");
+      }
     }
 
     void prepareSession();
@@ -75,17 +112,22 @@ export function ResetPasswordScreen() {
     setMessage(null);
 
     if (!supabase) {
-      setMessage("La conexión con Supabase no está configurada.");
+      setMessage("La conexion con Supabase no esta configurada.");
+      return;
+    }
+
+    if (!canReset) {
+      setMessage("El enlace vencio o no es valido. Volve a solicitar la recuperacion de contrasenia.");
       return;
     }
 
     if (password.length < 6) {
-      setMessage("La contraseña debe tener al menos 6 caracteres.");
+      setMessage("La contrasenia debe tener al menos 6 caracteres.");
       return;
     }
 
     if (password !== confirmPassword) {
-      setMessage("Las contraseñas no coinciden.");
+      setMessage("Las contrasenias no coinciden.");
       return;
     }
 
@@ -98,8 +140,12 @@ export function ResetPasswordScreen() {
       return;
     }
 
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(recoveryStorageKey);
+    }
+
     setIsDone(true);
-    setMessage("Tu contraseña fue actualizada correctamente.");
+    setMessage("Tu contrasenia fue actualizada correctamente.");
     setTimeout(() => router.push("/account"), 1600);
   }
 
@@ -126,7 +172,7 @@ export function ResetPasswordScreen() {
                 <Lock size={18} />
                 <input
                   autoComplete="new-password"
-                  disabled={!isReady}
+                  disabled={!isReady || !canReset}
                   minLength={6}
                   required
                   type="password"
@@ -142,7 +188,7 @@ export function ResetPasswordScreen() {
                 <Lock size={18} />
                 <input
                   autoComplete="new-password"
-                  disabled={!isReady}
+                  disabled={!isReady || !canReset}
                   minLength={6}
                   required
                   type="password"
@@ -154,7 +200,7 @@ export function ResetPasswordScreen() {
 
             {message ? <p className="form-message">{message}</p> : null}
 
-            <button className="button button--full" disabled={!isReady || isSaving} type="submit">
+            <button className="button button--full" disabled={!isReady || !canReset || isSaving} type="submit">
               {isSaving ? "Guardando..." : "Guardar nueva contraseña"}
             </button>
 
