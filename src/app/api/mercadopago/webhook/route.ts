@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { normalizePlan } from "@/lib/commercial";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +29,8 @@ type MercadoPagoPreapproval = {
 function mapStatus(status?: string) {
   if (status === "approved" || status === "authorized") return "active";
   if (status === "pending" || status === "in_process") return "pending";
-  if (status === "cancelled" || status === "rejected") return "cancelled";
+  if (status === "rejected") return "grace";
+  if (status === "cancelled") return "cancelled";
   if (status === "paused") return "paused";
   return "pending";
 }
@@ -93,13 +95,13 @@ export async function POST(request: NextRequest) {
     userId = payment?.metadata?.user_id ?? payment?.external_reference;
     mercadoPagoPaymentId = String(payment?.id ?? id);
     status = mapStatus(payment?.status);
-    plan = payment?.metadata?.plan ?? plan;
+    plan = normalizePlan(payment?.metadata?.plan ?? plan);
   } else if (topic.includes("preapproval")) {
     const preapproval = await fetchMercadoPago<MercadoPagoPreapproval>(`/preapproval/${id}`, token);
     userId = preapproval?.metadata?.user_id ?? preapproval?.external_reference;
     mercadoPagoPaymentId = preapproval?.id ?? id;
     status = mapStatus(preapproval?.status);
-    plan = preapproval?.metadata?.plan ?? planFromPreapprovalPlanId(preapproval?.preapproval_plan_id) ?? plan;
+    plan = normalizePlan(preapproval?.metadata?.plan ?? planFromPreapprovalPlanId(preapproval?.preapproval_plan_id) ?? plan);
   }
 
   if (!userId) {
@@ -108,21 +110,33 @@ export async function POST(request: NextRequest) {
 
   const now = new Date();
   const expiresAt = new Date(now);
-  expiresAt.setDate(expiresAt.getDate() + 32);
+  expiresAt.setDate(expiresAt.getDate() + (status === "grace" ? 3 : 32));
 
-  await supabase.from("subscriptions").upsert(
+  const { error: subscriptionError } = await supabase.from("subscriptions").upsert(
     {
       user_id: userId,
       mercado_pago_payment_id: mercadoPagoPaymentId,
       status,
       plan,
       started_at: status === "active" ? now.toISOString() : null,
-      expires_at: status === "active" ? expiresAt.toISOString() : null
+      expires_at: status === "active" || status === "grace" ? expiresAt.toISOString() : null
     },
     { onConflict: "user_id,plan" }
   );
 
-  await supabase.from("profiles").update({ is_premium: status === "active" }).eq("id", userId);
+  await supabase.from("profiles").update({ is_premium: status === "active" || status === "grace" }).eq("id", userId);
+
+  await supabase.from("payment_events").insert({
+    user_id: userId,
+    mercado_pago_id: mercadoPagoPaymentId,
+    plan,
+    status,
+    payload: body
+  });
+
+  if (subscriptionError) {
+    return NextResponse.json({ ok: false, error: "No se pudo actualizar la suscripción." }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true, user_id: userId, status });
 }

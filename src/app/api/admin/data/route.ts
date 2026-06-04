@@ -87,6 +87,12 @@ export async function GET() {
     .order("created_at", { ascending: false })
     .limit(300);
 
+  const [paymentEvents, referralEvents, referralCreditLedger] = await Promise.all([
+    supabaseAdmin.from("payment_events").select("*").order("created_at", { ascending: false }).limit(120),
+    supabaseAdmin.from("referral_events").select("*").order("created_at", { ascending: false }).limit(120),
+    supabaseAdmin.from("referral_credit_ledger").select("*").order("created_at", { ascending: false }).limit(120)
+  ]);
+
   const firstError =
     rates.error ??
     profiles.error ??
@@ -117,6 +123,9 @@ export async function GET() {
     sourceReadings: sourceReadings.data ?? [],
     communityReports: communityReports.data ?? [],
     analyticsEvents: analyticsEvents.error ? [] : (analyticsEvents.data ?? []),
+    paymentEvents: paymentEvents.error ? [] : (paymentEvents.data ?? []),
+    referralEvents: referralEvents.error ? [] : (referralEvents.data ?? []),
+    referralCreditLedger: referralCreditLedger.error ? [] : (referralCreditLedger.data ?? []),
     blueMendozaManual: blueMendozaManual.data?.value ?? null,
     communityFiltersEnabled: communityFilters.data?.value !== false,
     systemStatus: {

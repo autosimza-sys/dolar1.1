@@ -190,9 +190,10 @@ export const demoRates: Rate[] = [
 export const demoEducationCards: EducationCard[] = [
   {
     id: "demo-1",
-    title: "No compres por susto",
+    title: "Que es el dolar",
     content: "Si el dólar sube fuerte, no siempre conviene comprar desesperado.",
     category: "dolar",
+    level: "jovenes",
     related_alert_type: "above",
     is_visible: true,
     created_at: now
@@ -202,6 +203,7 @@ export const demoEducationCards: EducationCard[] = [
     title: "Tasa contra dólar",
     content: "El plazo fijo sirve cuando la tasa le gana al movimiento del dólar.",
     category: "plazo fijo",
+    level: "ahorristas",
     related_alert_type: "dollar_vs_fixed_term",
     is_visible: true,
     created_at: now
@@ -211,6 +213,7 @@ export const demoEducationCards: EducationCard[] = [
     title: "Mirar tarde sale caro",
     content: "El que mira el dólar una vez por semana llega tarde.",
     category: "errores comunes",
+    level: "ahorristas",
     related_alert_type: "gap_above",
     is_visible: true,
     created_at: now
@@ -220,6 +223,7 @@ export const demoEducationCards: EducationCard[] = [
     title: "Una alerta vale más",
     content: "Una alerta a tiempo puede ahorrarte más que una suscripción.",
     category: "ahorro",
+    level: "ahorristas",
     related_alert_type: "below",
     is_visible: true,
     created_at: now
@@ -229,6 +233,7 @@ export const demoEducationCards: EducationCard[] = [
     title: "Viajar también es tipo de cambio",
     content: "Antes de viajar, mirá la moneda. A veces el cambio te come el presupuesto.",
     category: "viajes",
+    level: "ahorristas",
     related_alert_type: "travel_opportunity",
     is_visible: true,
     created_at: now
@@ -238,7 +243,38 @@ export const demoEducationCards: EducationCard[] = [
     title: "Inflación sin vueltas",
     content: "Si todo sube más rápido que tu rendimiento, estás perdiendo poder de compra.",
     category: "inflacion",
+    level: "jovenes",
     related_alert_type: "rate_down",
+    is_visible: true,
+    created_at: now
+  },
+  {
+    id: "demo-7",
+    title: "Brecha cambiaria",
+    content: "La brecha compara el dolar oficial con otros valores. Si sube mucho, el mercado se pone mas sensible.",
+    category: "dolar",
+    level: "expertos",
+    related_alert_type: "gap_above",
+    is_visible: true,
+    created_at: now
+  },
+  {
+    id: "demo-8",
+    title: "MEP y CCL",
+    content: "MEP y CCL son referencias financieras. No son lo mismo que el blue ni que el oficial.",
+    category: "dolar",
+    level: "expertos",
+    related_alert_type: "mep_below",
+    is_visible: true,
+    created_at: now
+  },
+  {
+    id: "demo-9",
+    title: "Spread",
+    content: "El spread es la diferencia entre compra y venta. Si es alto, entrar y salir cuesta mas.",
+    category: "errores comunes",
+    level: "expertos",
+    related_alert_type: "above",
     is_visible: true,
     created_at: now
   }

@@ -39,10 +39,13 @@ import type {
   CommunityReport,
   EducationCard,
   NotificationJob,
+  PaymentEvent,
   Profile,
   Rate,
   RateSource,
   RateSourceReading,
+  ReferralCreditLedger,
+  ReferralEvent,
   SourceUpdateLog,
   Subscription,
   UserAlert
@@ -70,6 +73,9 @@ type AdminData = {
   sourceReadings: RateSourceReading[];
   communityReports: CommunityReport[];
   analyticsEvents: AnalyticsEvent[];
+  paymentEvents: PaymentEvent[];
+  referralEvents: ReferralEvent[];
+  referralCreditLedger: ReferralCreditLedger[];
   systemStatus: SystemStatus;
   blueMendozaManual: {
     enabled?: boolean;
@@ -115,6 +121,9 @@ const emptyAdminData: AdminData = {
   sourceReadings: [],
   communityReports: [],
   analyticsEvents: [],
+  paymentEvents: [],
+  referralEvents: [],
+  referralCreditLedger: [],
   systemStatus: emptySystemStatus,
   blueMendozaManual: null,
   communityFiltersEnabled: true
@@ -136,16 +145,16 @@ const adminTabs: Array<{ id: AdminTab; label: string; helper: string }> = [
 
 const planPrices: Record<Subscription["plan"], number> = {
   free: 0,
-  essential_monthly: 500,
-  tracking_monthly: 1500,
-  premium_monthly: 35000
+  essential_monthly: 999,
+  tracking_monthly: 3999,
+  premium_monthly: 149999
 };
 
 const planLabels: Record<Subscription["plan"], string> = {
   free: "Gratis",
   essential_monthly: "Esencial",
   tracking_monthly: "Seguimiento",
-  premium_monthly: "Premium"
+  premium_monthly: "Premium WhatsApp"
 };
 
 function asNumber(value: FormDataEntryValue | null) {
@@ -356,6 +365,15 @@ export function AdminScreen() {
   );
   const paymentsPending = useMemo(() => data.subscriptions.filter((subscription) => subscription.status === "pending").length, [data.subscriptions]);
   const activeSubscriptions = useMemo(() => data.subscriptions.filter((subscription) => subscription.status === "active").length, [data.subscriptions]);
+  const validReferrals = useMemo(() => data.referralEvents.filter((event) => event.status === "valid").length, [data.referralEvents]);
+  const pendingReferrals = useMemo(() => data.referralEvents.filter((event) => event.status === "pending").length, [data.referralEvents]);
+  const creditsApplied = useMemo(
+    () =>
+      data.referralCreditLedger
+        .filter((item) => item.type === "used" && item.status === "used")
+        .reduce((total, item) => total + Number(item.credit_amount ?? 0), 0),
+    [data.referralCreditLedger]
+  );
   const expiringSubscriptions = useMemo(
     () =>
       data.subscriptions.filter((subscription) => {
@@ -438,6 +456,9 @@ export function AdminScreen() {
         ...adminData,
         rates: adminData.rates.length ? adminData.rates : demoRates,
         analyticsEvents: adminData.analyticsEvents ?? [],
+        paymentEvents: adminData.paymentEvents ?? [],
+        referralEvents: adminData.referralEvents ?? [],
+        referralCreditLedger: adminData.referralCreditLedger ?? [],
         systemStatus: adminData.systemStatus ?? emptySystemStatus,
         blueMendozaManual: adminData.blueMendozaManual ?? null,
         communityFiltersEnabled: adminData.communityFiltersEnabled !== false
@@ -579,6 +600,37 @@ export function AdminScreen() {
 
   async function deleteAlert(alert: UserAlert) {
     await runPanelAction(`alert-delete:${alert.id}`, { action: "delete_alert", alertId: alert.id }, "Alerta eliminada.");
+  }
+
+  async function invalidateReferral(referral: ReferralEvent) {
+    await runPanelAction(
+      `referral-invalid:${referral.id}`,
+      { action: "invalidate_referral", referralId: referral.id },
+      "Referido invalidado."
+    );
+  }
+
+  async function applyManualCredit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const emailValue = String(formData.get("email") ?? "").trim().toLowerCase();
+    const amount = Number(formData.get("amount") ?? 0);
+    const description = String(formData.get("description") ?? "Credito manual admin");
+    const profile = data.profiles.find((item) => item.email.toLowerCase() === emailValue);
+
+    if (!profile) {
+      setMessage("No encontre un usuario con ese email.");
+      return;
+    }
+
+    await runPanelAction(
+      "manual_credit",
+      { action: "apply_manual_credit", userId: profile.id, payload: { amount, description } },
+      "Credito manual aplicado."
+    );
+    form.reset();
   }
 
   const isActionLoading = (key: string) => actionLoading === key;
@@ -965,25 +1017,28 @@ export function AdminScreen() {
             <StatCard label="Pruebas / pagos pendientes" value={paymentsPending} />
             <StatCard label="Premium por vencer" value={expiringSubscriptions} />
             <StatCard label="Ingresos estimados mes" value={formatMoney(incomeMonth, true)} />
+            <StatCard label="Referidos validos" value={validReferrals} />
+            <StatCard label="Referidos pendientes" value={pendingReferrals} />
+            <StatCard label="Credito aplicado" value={formatMoney(creditsApplied, true)} />
           </section>
           <section className="plans">
             <article className="plan-card">
               <span className="plan-card__label">Plan Esencial</span>
-              <h2>$500/mes</h2>
-              <p className="plan-card__copy">Segui el valor que mas te importa.</p>
-              <span className="plan-card__trial">7 dias gratis / 1 alerta por email</span>
+              <h2>$999/mes</h2>
+              <p className="plan-card__copy">Lo basico para seguir el mercado sin complicarte.</p>
+              <span className="plan-card__note">Sin prueba gratis / 2 alertas por email</span>
             </article>
             <article className="plan-card plan-card--featured">
               <span className="plan-card__label">Plan Seguimiento</span>
-              <h2>$1.500/mes</h2>
+              <h2>$3.999/mes</h2>
               <p className="plan-card__copy">No llegues tarde a los movimientos del mercado.</p>
               <span className="plan-card__trial">7 dias gratis / hasta 4 alertas</span>
             </article>
             <article className="plan-card plan-card--premium plan-card--exclusive">
-              <span className="plan-card__label">Plan Premium</span>
-              <h2>$35.000/mes</h2>
-              <p className="plan-card__copy">Alertas inmediatas para decisiones importantes.</p>
-              <span className="plan-card__note">Sin prueba gratis / WhatsApp limitado</span>
+              <span className="plan-card__label">Plan Premium WhatsApp</span>
+              <h2>$149.999/mes</h2>
+              <p className="plan-card__copy">Pensado para quienes necesitan reaccionar primero.</p>
+              <span className="plan-card__note">Sin prueba gratis / hasta 6 WhatsApp</span>
             </article>
           </section>
           <section className="admin-two-columns">
@@ -1038,6 +1093,90 @@ export function AdminScreen() {
                   </article>
                 ))}
                 {!data.subscriptions.length ? <div className="empty-state">Todavia no hay suscripciones registradas.</div> : null}
+              </div>
+            </div>
+          </section>
+          <section className="admin-two-columns">
+            <div className="admin-panel">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Referidos</p>
+                  <h2>Actividad reciente</h2>
+                </div>
+              </div>
+              <div className="admin-list">
+                {data.referralEvents.slice(0, 12).map((event) => (
+                  <article key={event.id}>
+                    <Users size={18} />
+                    <div>
+                      <strong>{event.referral_code}</strong>
+                      <span>
+                        {event.status} / referido {event.referred_user_id ?? "sin usuario"} / {formatDateTime(event.created_at)}
+                      </span>
+                    </div>
+                    <button
+                      className="button button--small button--danger"
+                      disabled={event.status === "rejected" || isActionLoading(`referral-invalid:${event.id}`)}
+                      type="button"
+                      onClick={() => invalidateReferral(event)}
+                    >
+                      Invalidar
+                    </button>
+                  </article>
+                ))}
+                {!data.referralEvents.length ? <div className="empty-state">Ejecuta el SQL comercial para ver referidos.</div> : null}
+              </div>
+              <button
+                className="button button--full"
+                disabled={Boolean(actionLoading)}
+                type="button"
+                onClick={() => runPanelAction("validate_referrals", { action: "validate_referrals" }, "Referidos revisados.")}
+              >
+                <RefreshCw size={17} />
+                Validar referidos
+              </button>
+            </div>
+            <div className="admin-panel">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Creditos</p>
+                  <h2>Historial comercial</h2>
+                </div>
+              </div>
+              <div className="admin-list">
+                <form className="admin-create" onSubmit={applyManualCredit}>
+                  <div className="admin-fields">
+                    <label className="field field--tight">
+                      <span>Email usuario</span>
+                      <input name="email" placeholder="usuario@email.com" required type="email" />
+                    </label>
+                    <label className="field field--tight">
+                      <span>Credito $</span>
+                      <input min="1" name="amount" required step="1" type="number" />
+                    </label>
+                    <label className="field field--tight">
+                      <span>Motivo</span>
+                      <input name="description" placeholder="Credito manual admin" />
+                    </label>
+                  </div>
+                  <button className="button button--full" disabled={isActionLoading("manual_credit")} type="submit">
+                    <WalletCards size={17} />
+                    Aplicar credito manual
+                  </button>
+                </form>
+                {data.referralCreditLedger.slice(0, 12).map((credit) => (
+                  <article key={credit.id}>
+                    <WalletCards size={18} />
+                    <div>
+                      <strong>{formatMoney(credit.credit_amount, true)}</strong>
+                      <span>
+                        {credit.type} / {credit.status} / {profileById.get(credit.user_id)?.email ?? credit.user_id} /
+                        {credit.expires_at ? ` vence ${formatDateTime(credit.expires_at)}` : " sin vencimiento"}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+                {!data.referralCreditLedger.length ? <div className="empty-state">Sin creditos de referidos todavia.</div> : null}
               </div>
             </div>
           </section>

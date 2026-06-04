@@ -27,6 +27,11 @@ export type Profile = {
   phone: string | null;
   full_name: string | null;
   is_premium: boolean;
+  referral_code?: string | null;
+  referred_by_code?: string | null;
+  trial_used?: boolean;
+  login_count?: number;
+  last_login_at?: string | null;
   created_at: string;
 };
 
@@ -69,6 +74,7 @@ export type EducationCard = {
   title: string;
   content: string;
   category: "dolar" | "plazo fijo" | "inflacion" | "ahorro" | "viajes" | "errores comunes";
+  level?: "jovenes" | "ahorristas" | "expertos";
   related_alert_type: AlertCondition;
   is_visible: boolean;
   created_at: string;
@@ -78,7 +84,7 @@ export type Subscription = {
   id: string;
   user_id: string;
   mercado_pago_payment_id: string | null;
-  status: "pending" | "active" | "paused" | "cancelled" | "expired";
+  status: "pending" | "trial" | "active" | "grace" | "paused" | "suspended" | "cancelled" | "expired";
   plan: "free" | "essential_monthly" | "tracking_monthly" | "premium_monthly";
   started_at: string | null;
   expires_at: string | null;
@@ -184,4 +190,60 @@ export type AnalyticsEvent = {
   source: string | null;
   campaign: string | null;
   created_at: string;
+};
+
+export type PaymentEvent = {
+  id: string;
+  user_id: string;
+  mercado_pago_id: string | null;
+  plan: "free" | "essential_monthly" | "tracking_monthly" | "premium_monthly";
+  status: string;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type ReferralEvent = {
+  id: string;
+  referrer_user_id: string;
+  referred_user_id: string | null;
+  referral_code: string;
+  status: "pending" | "valid" | "suspicious" | "rejected";
+  created_at: string;
+  validated_at: string | null;
+  valid_after: string | null;
+};
+
+export type ReferralCreditLedger = {
+  id: string;
+  user_id: string;
+  referral_event_id: string | null;
+  points: number;
+  credit_amount: number;
+  type: "earned" | "used" | "expired" | "manual";
+  status: "active" | "used" | "expired" | "cancelled";
+  description: string | null;
+  created_at: string;
+  expires_at: string | null;
+  applied_at: string | null;
+};
+
+export type ReferralSummary = {
+  referral_code: string;
+  referral_link: string;
+  points_active: number;
+  credit_available: number;
+  referrals_sent: number;
+  referrals_valid: number;
+  referrals_pending: number;
+  next_expiration: string | null;
+  level: string;
+  history: Array<{
+    id: string;
+    description: string;
+    points: number;
+    credit_amount: number;
+    status: string;
+    created_at: string;
+    expires_at: string | null;
+  }>;
 };

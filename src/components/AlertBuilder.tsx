@@ -320,9 +320,10 @@ function getConditionOptions(track: TrackOption | undefined): ConditionOption[] 
 }
 
 function alertLimitForPlan(plan: ActivePlan) {
+  if (plan === "essential_monthly") return 2;
   if (plan === "tracking_monthly") return 4;
   if (plan === "premium_monthly") return Infinity;
-  return 1;
+  return 0;
 }
 
 function valueSuffix(kind: ValueKind) {
@@ -399,7 +400,7 @@ export function AlertBuilder() {
     const activeAlerts = account.alerts.filter((alert) => alert.is_active);
     const activeAlertLimit = alertLimitForPlan(activePlan);
     if (activeAlerts.length >= activeAlertLimit) {
-      setNotice("Alcanzaste el limite de alertas activas de tu plan.");
+      setNotice(activePlan === "free" ? "La cuenta gratuita no incluye alertas. Activá un plan para seguir el mercado." : "Alcanzaste el límite de alertas activas de tu plan.");
       return false;
     }
 

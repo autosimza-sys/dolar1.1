@@ -272,6 +272,7 @@ button:disabled {
 .sales-lines,
 .premium-strip,
 .admin-access-strip,
+.referral-panel,
 .cookie-consent,
 .empty-state,
 .timeline article {
@@ -1544,6 +1545,10 @@ input:focus {
   padding: 0 14px 2px;
 }
 
+.category-scroll--levels {
+  margin-top: -14px;
+}
+
 .category-scroll button {
   color: var(--gray-text);
   flex: 0 0 auto;
@@ -1586,6 +1591,18 @@ input:focus {
   margin: 8px 0 10px;
 }
 
+.education-card small {
+  color: var(--gray-text);
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0 0 8px;
+}
+
+.education-card__meta {
+  display: inline-block;
+}
+
 .panel {
   padding: 14px;
 }
@@ -1605,6 +1622,81 @@ input:focus {
 .status--premium {
   background: rgba(250, 204, 21, 0.15);
   color: var(--yellow);
+}
+
+.referral-panel {
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+}
+
+.referral-panel > p {
+  color: var(--gray-text);
+  line-height: 1.42;
+  margin: 0;
+}
+
+.referral-panel > .section-heading svg {
+  color: var(--green);
+  flex: 0 0 auto;
+}
+
+.referral-link-box {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(0, 200, 83, 0.24);
+  border-radius: var(--radius);
+  display: flex;
+  gap: 10px;
+  min-height: 50px;
+  padding: 10px 10px 10px 12px;
+}
+
+.referral-link-box span {
+  color: var(--white-soft);
+  flex: 1;
+  font-size: 13px;
+  font-weight: 750;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.referral-actions {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 1fr;
+}
+
+.referral-stats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.referral-stats article {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px;
+}
+
+.referral-stats span {
+  color: var(--gray-text);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.referral-stats strong {
+  color: var(--white);
+  font-size: 18px;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
 }
 
 .account-alert {
@@ -1917,6 +2009,14 @@ input:focus {
 
   .favorites-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .referral-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .referral-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

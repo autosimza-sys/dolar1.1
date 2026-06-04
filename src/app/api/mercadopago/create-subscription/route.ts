@@ -1,56 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { commercialPlans, normalizePlan, planPrice, type PlanId } from "@/lib/commercial";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
-type PlanId = "essential_monthly" | "tracking_monthly" | "premium_monthly";
-
-const planCatalog: Record<
-  PlanId,
-  {
-    title: string;
-    description: string;
-    defaultPrice: number;
-    envPrice?: string;
-    preapprovalEnv?: string;
-  }
-> = {
-  essential_monthly: {
-    title: "Dólar MZA Esencial mensual",
-    description: "1 alerta personalizada por email y 7 días gratis cuando la suscripción está configurada.",
-    defaultPrice: 500,
-    envPrice: process.env.ESSENTIAL_MONTHLY_PRICE,
-    preapprovalEnv: process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_ESSENTIAL_ID
-  },
-  tracking_monthly: {
-    title: "Dólar MZA Seguimiento mensual",
-    description: "Hasta 4 alertas por email y 7 días gratis cuando la suscripción está configurada.",
-    defaultPrice: 1500,
-    envPrice: process.env.TRACKING_MONTHLY_PRICE,
-    preapprovalEnv: process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_TRACKING_ID
-  },
-  premium_monthly: {
-    title: "Dólar MZA Premium mensual",
-    description: "Alertas ilimitadas por email, hasta 6 alertas por WhatsApp y avisos prioritarios.",
-    defaultPrice: 35000,
-    envPrice: process.env.PREMIUM_MONTHLY_PRICE,
-    preapprovalEnv: process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_PREMIUM_ID ?? process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_ID
-  }
-};
 
 function appUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
 }
 
-function normalizePlan(plan?: string): PlanId {
-  if (plan === "essential_monthly" || plan === "tracking_monthly" || plan === "premium_monthly") return plan;
-  return "tracking_monthly";
-}
-
-function planPrice(plan: PlanId) {
-  const config = planCatalog[plan];
-  const configuredPrice = Number(config.envPrice);
-  return Number.isFinite(configuredPrice) && configuredPrice > 0 ? configuredPrice : config.defaultPrice;
+function preapprovalPlanId(plan: PlanId) {
+  if (plan === "essential_monthly") return process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_ESSENTIAL_ID;
+  if (plan === "tracking_monthly") return process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_TRACKING_ID;
+  return process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_PREMIUM_ID ?? process.env.MERCADO_PAGO_PREAPPROVAL_PLAN_ID;
 }
 
 export async function POST(request: NextRequest) {
@@ -60,6 +21,7 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createSupabaseServerClient();
+  const supabaseAdmin = createSupabaseAdminClient();
   if (!supabase) {
     return NextResponse.json({ error: "Falta configurar Supabase." }, { status: 500 });
   }
@@ -74,17 +36,107 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as { plan?: string };
   const plan = normalizePlan(body.plan);
-  const config = planCatalog[plan];
-  const preapprovalPlanId = config.preapprovalEnv;
+  const config = commercialPlans[plan];
 
-  const endpoint = preapprovalPlanId
-    ? "https://api.mercadopago.com/preapproval"
-    : "https://api.mercadopago.com/checkout/preferences";
+  const { data: profile } = await supabase.from("profiles").select("trial_used").eq("id", user.id).maybeSingle();
+  const trialUsed = Boolean((profile as { trial_used?: boolean } | null)?.trial_used);
 
-  const payload = preapprovalPlanId
+  if (plan === "tracking_monthly" && config.hasTrial && !trialUsed) {
+    const now = new Date();
+    const expiresAt = new Date(now);
+    expiresAt.setDate(expiresAt.getDate() + config.trialDays);
+
+    const { error: profileError } = await supabase.from("profiles").update({ trial_used: true, is_premium: true }).eq("id", user.id);
+    const { error: subscriptionError } = await supabase.from("subscriptions").upsert(
+      {
+        user_id: user.id,
+        mercado_pago_payment_id: "trial",
+        status: "trial",
+        plan,
+        started_at: now.toISOString(),
+        expires_at: expiresAt.toISOString()
+      },
+      { onConflict: "user_id,plan" }
+    );
+
+    if (profileError || subscriptionError) {
+      return NextResponse.json(
+        { error: "Falta ejecutar el SQL comercial en Supabase para activar pruebas gratis." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      init_point: "/account?trial=tracking",
+      message: "Prueba de 7 días activada."
+    });
+  }
+
+  const preapprovalId = preapprovalPlanId(plan);
+  const endpoint = preapprovalId ? "https://api.mercadopago.com/preapproval" : "https://api.mercadopago.com/checkout/preferences";
+  const originalPrice = planPrice(plan);
+  let discountApplied = 0;
+  let finalPrice = originalPrice;
+
+  if (!preapprovalId && supabaseAdmin) {
+    const { data: appliedCredit } = await supabaseAdmin.rpc("apply_referral_credit", {
+      p_user_id: user.id,
+      p_amount: originalPrice,
+      p_description: `Credito usado en ${config.name}`
+    });
+
+    discountApplied = Number(appliedCredit ?? 0);
+    finalPrice = Math.max(originalPrice - discountApplied, 0);
+  }
+
+  if (!preapprovalId && finalPrice <= 0) {
+    const now = new Date();
+    const expiresAt = new Date(now);
+    expiresAt.setDate(expiresAt.getDate() + 32);
+
+    const { error: subscriptionError } = await supabase.from("subscriptions").upsert(
+      {
+        user_id: user.id,
+        mercado_pago_payment_id: "credit-covered",
+        status: "active",
+        plan,
+        started_at: now.toISOString(),
+        expires_at: expiresAt.toISOString()
+      },
+      { onConflict: "user_id,plan" }
+    );
+
+    await supabase.from("profiles").update({ is_premium: true }).eq("id", user.id);
+
+    if (supabaseAdmin) {
+      await supabaseAdmin.from("payment_events").insert({
+        user_id: user.id,
+        mercado_pago_id: "credit-covered",
+        plan,
+        status: "active",
+        payload: {
+          source: "referral_credit",
+          original_price: originalPrice,
+          discount_applied: discountApplied,
+          final_price: 0
+        }
+      });
+    }
+
+    if (subscriptionError) {
+      return NextResponse.json({ error: "No se pudo activar la membresia con credito." }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      init_point: "/account?credit=applied",
+      message: "Tu credito cubrio este periodo."
+    });
+  }
+
+  const payload = preapprovalId
     ? {
-        preapproval_plan_id: preapprovalPlanId,
-        reason: config.title,
+        preapproval_plan_id: preapprovalId,
+        reason: `Dólar MZA ${config.name}`,
         external_reference: user.id,
         payer_email: user.email,
         metadata: { user_id: user.id, plan },
@@ -94,16 +146,16 @@ export async function POST(request: NextRequest) {
     : {
         items: [
           {
-            title: config.title,
-            description: config.description,
+            title: `Dólar MZA ${config.name}`,
+            description: config.message,
             quantity: 1,
             currency_id: "ARS",
-            unit_price: planPrice(plan)
+            unit_price: finalPrice
           }
         ],
         payer: { email: user.email },
         external_reference: user.id,
-        metadata: { user_id: user.id, plan },
+        metadata: { user_id: user.id, plan, original_price: originalPrice, discount_applied: discountApplied, final_price: finalPrice },
         back_urls: {
           success: `${appUrl()}/account`,
           failure: `${appUrl()}/premium`,

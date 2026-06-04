@@ -24,6 +24,9 @@ type AdminAction =
   | "reactivate_alert"
   | "delete_alert"
   | "update_user_premium"
+  | "validate_referrals"
+  | "invalidate_referral"
+  | "apply_manual_credit"
   | "test_email"
   | "test_mercado_pago_config";
 
@@ -33,6 +36,7 @@ type AdminActionBody = {
   sourceId?: string;
   reportId?: string;
   alertId?: string;
+  referralId?: string;
   userId?: string;
   status?: string;
   enabled?: boolean;
@@ -328,6 +332,51 @@ export async function POST(request: NextRequest) {
         ok: true,
         message: isPremium ? "Premium activado manualmente." : "Premium desactivado manualmente."
       });
+    }
+
+    if (body.action === "validate_referrals") {
+      const { data, error } = await supabaseAdmin.rpc("validate_referrals");
+      if (error) {
+        throw new Error("Falta ejecutar el SQL comercial de referidos.");
+      }
+
+      return NextResponse.json({
+        ok: true,
+        message: `Referidos validados: ${Number(data ?? 0)}.`
+      });
+    }
+
+    if (body.action === "invalidate_referral") {
+      const referralId = requireString(body.referralId, "referralId");
+      const { error } = await supabaseAdmin
+        .from("referral_events")
+        .update({ status: "rejected", validated_at: new Date().toISOString() })
+        .eq("id", referralId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true, message: "Referido invalidado correctamente." });
+    }
+
+    if (body.action === "apply_manual_credit") {
+      const userId = requireString(body.userId, "userId");
+      const amount = finiteNumber(body.payload?.amount);
+      const description = String(body.payload?.description ?? "Credito manual admin");
+
+      if (!amount || amount <= 0) {
+        throw new Error("El credito manual debe ser mayor a cero.");
+      }
+
+      const { error } = await supabaseAdmin.from("referral_credit_ledger").insert({
+        user_id: userId,
+        points: Math.floor(amount / 50) * 1000,
+        credit_amount: amount,
+        type: "manual",
+        status: "active",
+        description,
+        expires_at: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString()
+      });
+
+      if (error) throw error;
+      return NextResponse.json({ ok: true, message: "Credito manual aplicado correctamente." });
     }
 
     if (body.action === "test_email") {

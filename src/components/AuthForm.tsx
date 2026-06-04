@@ -46,6 +46,17 @@ function markPasswordRecoveryPending(email: string) {
   window.localStorage.setItem(recoveryPendingKey, JSON.stringify(payload));
 }
 
+function getReferralCodeFromCookie() {
+  if (typeof document === "undefined") return null;
+
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("dolar_mza_ref="));
+
+  return match ? decodeURIComponent(match.split("=")[1] ?? "").trim().toLowerCase() : null;
+}
+
 function isUnconfirmedEmailError(message: string) {
   return message.toLowerCase().includes("email not confirmed") || message.toLowerCase().includes("not confirmed");
 }
@@ -139,6 +150,7 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
     setIsSubmitting(true);
 
     if (mode === "register") {
+      const referralCode = getReferralCodeFromCookie();
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
@@ -146,7 +158,8 @@ export function AuthForm({ compact = false, initialMode = "register", onSuccess 
           emailRedirectTo: getAuthRedirectUrl("/account"),
           data: {
             phone,
-            full_name: fullName
+            full_name: fullName,
+            referred_by_code: referralCode
           }
         }
       });

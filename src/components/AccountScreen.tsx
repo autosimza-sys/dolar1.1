@@ -2,13 +2,13 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Crown, LogOut, Pencil, ShieldCheck, Star, Trash2 } from "lucide-react";
+import { Bell, Copy, Crown, Gift, LogOut, MessageCircle, Pencil, ShieldCheck, Star, Trash2 } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_TYPES } from "@/lib/constants";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { getAdminEmails, useAccount, useRates } from "@/lib/hooks";
-import type { AlertLog, UserAlert } from "@/lib/types";
+import type { AlertLog, ReferralSummary, UserAlert } from "@/lib/types";
 
 function alertLabel(alert: UserAlert) {
   return ALERT_TYPES.find((type) => type.value === alert.condition_type)?.label ?? alert.condition_type;
@@ -20,10 +20,12 @@ function spreadLabel(buy: number | null, sell: number | null) {
 }
 
 function subscriptionLabel(plan?: string, status?: string, isPremium?: boolean) {
+  if (status === "trial") return "Prueba gratis";
+  if (status === "grace") return "Período de gracia";
   if (status !== "active" && !isPremium) return "Gratis";
   if (plan === "essential_monthly") return "Esencial";
   if (plan === "tracking_monthly") return "Seguimiento";
-  if (plan === "premium_monthly" || isPremium) return "Premium";
+  if (plan === "premium_monthly" || isPremium) return "Premium WhatsApp";
   return "Gratis";
 }
 
@@ -38,6 +40,8 @@ export function AccountScreen() {
   const [logs, setLogs] = useState<AlertLog[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
+  const [referralError, setReferralError] = useState<string | null>(null);
   const planLabel = subscriptionLabel(account.subscription?.plan, account.subscription?.status, account.isPremium);
   const adminEmails = useMemo(() => getAdminEmails(), []);
 
@@ -61,6 +65,39 @@ export function AccountScreen() {
 
     void loadLogs();
   }, [account.supabase, account.user]);
+
+  useEffect(() => {
+    if (!account.user || typeof window === "undefined") return;
+
+    const key = `dolar_mza_login_tracked_${account.user.id}`;
+    if (window.sessionStorage.getItem(key) === "1") return;
+
+    window.sessionStorage.setItem(key, "1");
+    void fetch("/api/referrals/track-login", { method: "POST" });
+  }, [account.user]);
+
+  useEffect(() => {
+    async function loadReferralSummary() {
+      if (!account.user) {
+        setReferralSummary(null);
+        return;
+      }
+
+      const response = await fetch("/api/referrals/summary");
+      const payload = (await response.json().catch(() => ({}))) as ReferralSummary & { error?: string };
+
+      if (!response.ok) {
+        setReferralSummary(null);
+        setReferralError(payload.error ?? "Referidos pendiente de configuración.");
+        return;
+      }
+
+      setReferralError(null);
+      setReferralSummary(payload);
+    }
+
+    void loadReferralSummary();
+  }, [account.user]);
 
   useEffect(() => {
     async function checkAdminAccess() {
@@ -135,6 +172,19 @@ export function AccountScreen() {
     await account.reload();
   }
 
+  async function copyReferralLink() {
+    if (!referralSummary?.referral_link) return;
+
+    await navigator.clipboard.writeText(referralSummary.referral_link);
+    setMessage("Link de referido copiado.");
+  }
+
+  function whatsappReferralLink() {
+    const link = referralSummary?.referral_link ?? "";
+    const text = `Te invito a Dólar MZA. Cotizaciones, educación financiera y alertas para estar un paso antes: ${link}`;
+    return `https://wa.me/?text=${encodeURIComponent(text)}`;
+  }
+
   if (account.isLoading) {
     return (
       <div className="screen">
@@ -185,6 +235,62 @@ export function AccountScreen() {
           </Link>
         </section>
       ) : null}
+
+      <section className="referral-panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Referidos</p>
+            <h2>Invitá amigos y acumulá crédito</h2>
+          </div>
+          <Gift size={22} />
+        </div>
+        <p>Invitá amigos a Dólar MZA y reducí el costo de tu suscripción.</p>
+
+        {referralSummary ? (
+          <>
+            <div className="referral-link-box">
+              <span>{referralSummary.referral_link}</span>
+              <button className="icon-button" aria-label="Copiar link" type="button" onClick={copyReferralLink}>
+                <Copy size={18} />
+              </button>
+            </div>
+            <div className="referral-actions">
+              <button className="button button--ghost" type="button" onClick={copyReferralLink}>
+                <Copy size={17} />
+                Copiar link
+              </button>
+              <a className="button" href={whatsappReferralLink()} target="_blank" rel="noreferrer">
+                <MessageCircle size={17} />
+                Compartir por WhatsApp
+              </a>
+            </div>
+            <div className="referral-stats">
+              <article>
+                <span>Nivel</span>
+                <strong>{referralSummary.level}</strong>
+              </article>
+              <article>
+                <span>Puntos activos</span>
+                <strong>{referralSummary.points_active}</strong>
+              </article>
+              <article>
+                <span>Crédito disponible</span>
+                <strong>{formatMoney(referralSummary.credit_available, true)}</strong>
+              </article>
+              <article>
+                <span>Referidos válidos</span>
+                <strong>{referralSummary.referrals_valid}</strong>
+              </article>
+            </div>
+            <small className="spread-line">
+              Pendientes: {referralSummary.referrals_pending} · Próximo vencimiento:{" "}
+              {referralSummary.next_expiration ? formatDateTime(referralSummary.next_expiration) : "sin vencimientos próximos"}
+            </small>
+          </>
+        ) : (
+          <div className="empty-state">{referralError ?? "Preparando tu link de referido..."}</div>
+        )}
+      </section>
 
       <section className="section">
         <div className="section-heading">

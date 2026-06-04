@@ -3,53 +3,10 @@
 import { useState } from "react";
 import { BellRing, Check, Crown, Mail, MessageCircle, Sparkles } from "lucide-react";
 import { AuthModal } from "@/components/AuthModal";
+import { commercialPlans, freePlan, type PlanId } from "@/lib/commercial";
 import { useAccount } from "@/lib/hooks";
 
-type PlanId = "essential_monthly" | "tracking_monthly" | "premium_monthly";
-
-const plans: Array<{
-  id: PlanId;
-  name: string;
-  price: string;
-  tag: string;
-  copy: string;
-  bullets: string[];
-  cta: string;
-  tone?: "featured" | "exclusive";
-  trial?: string;
-}> = [
-  {
-    id: "essential_monthly",
-    name: "Esencial",
-    price: "$500/mes",
-    tag: "Plan base",
-    copy: "Seguí el valor que más te importa.",
-    bullets: ["1 alerta personalizada", "Alertas por email", "7 días gratis"],
-    cta: "Probar Esencial",
-    trial: "7 días gratis"
-  },
-  {
-    id: "tracking_monthly",
-    name: "Seguimiento",
-    price: "$1.500/mes",
-    tag: "Recomendado",
-    copy: "No llegues tarde a los movimientos del mercado.",
-    bullets: ["Hasta 4 alertas", "Alertas por email", "7 días gratis"],
-    cta: "Probar Seguimiento",
-    tone: "featured",
-    trial: "7 días gratis"
-  },
-  {
-    id: "premium_monthly",
-    name: "Premium",
-    price: "$35.000/mes",
-    tag: "Exclusivo",
-    copy: "Alertas inmediatas para decisiones importantes.",
-    bullets: ["Alertas ilimitadas por email", "Hasta 6 alertas por WhatsApp", "Avisos prioritarios", "Alertas más rápidas"],
-    cta: "Activar Premium",
-    tone: "exclusive"
-  }
-];
+const plans = Object.values(commercialPlans);
 
 export function PremiumScreen() {
   const account = useAccount();
@@ -71,10 +28,10 @@ export function PremiumScreen() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ plan })
     });
-    const payload = (await response.json()) as { init_point?: string; error?: string };
+    const payload = (await response.json()) as { init_point?: string; message?: string; error?: string };
 
     if (!response.ok || !payload.init_point) {
-      setMessage(payload.error ?? "No se pudo iniciar Mercado Pago.");
+      setMessage(payload.error ?? payload.message ?? "No se pudo iniciar Mercado Pago.");
       setIsLoading(false);
       return;
     }
@@ -94,10 +51,30 @@ export function PremiumScreen() {
       </section>
 
       <section className="sales-lines">
-        <p>No pagás por ver números. Pagás por estar un paso antes.</p>
-        <p>Una alerta a tiempo puede ahorrarte más que una suscripción.</p>
-        <p>Tu plata no espera. Tus alertas tampoco.</p>
+        <p>No llegues tarde al mercado.</p>
+        <p>Elegí qué seguir y Dólar MZA te avisa.</p>
+        <p>La información justa cuando la necesitás.</p>
       </section>
+
+      <article className="plan-card plan-card--free">
+        <div className="plan-card__top">
+          <div>
+            <span className="plan-card__label">Gratis</span>
+            <h2>{freePlan.name}</h2>
+          </div>
+          <strong>{freePlan.priceLabel}</strong>
+        </div>
+        <p className="plan-card__copy">Entrá, aprendé, guardá favoritos e invitá amigos sin pagar.</p>
+        <ul>
+          {freePlan.includes.map((item) => (
+            <li key={item}>
+              <Check size={17} />
+              {item}
+            </li>
+          ))}
+        </ul>
+        <span className="plan-card__note">No incluye alertas, WhatsApp ni beneficios premium</span>
+      </article>
 
       <div className="plans">
         {plans.map((plan) => (
@@ -112,9 +89,9 @@ export function PremiumScreen() {
                 <span className="plan-card__label">{plan.tag}</span>
                 <h2>{plan.name}</h2>
               </div>
-              <strong>{plan.price}</strong>
+              <strong>{plan.priceLabel}</strong>
             </div>
-            <p className="plan-card__copy">{plan.copy}</p>
+            <p className="plan-card__copy">{plan.message}</p>
             <ul>
               {plan.bullets.map((item) => (
                 <li key={item}>
@@ -123,7 +100,11 @@ export function PremiumScreen() {
                 </li>
               ))}
             </ul>
-            {plan.trial ? <span className="plan-card__trial">{plan.trial}</span> : <span className="plan-card__note">Sin prueba gratis</span>}
+            {plan.hasTrial ? (
+              <span className="plan-card__trial">7 días gratis, una sola vez por usuario</span>
+            ) : (
+              <span className="plan-card__note">Sin prueba gratis</span>
+            )}
             <button
               className={`button button--full ${plan.tone === "exclusive" ? "button--premium" : ""}`}
               disabled={isLoading}
@@ -131,7 +112,7 @@ export function PremiumScreen() {
               onClick={() => startPlan(plan.id)}
             >
               {plan.tone === "exclusive" ? <Sparkles size={18} /> : <BellRing size={18} />}
-              {isLoading ? "Abriendo Mercado Pago..." : plan.cta}
+              {isLoading ? "Abriendo..." : plan.cta}
             </button>
           </article>
         ))}
@@ -148,7 +129,7 @@ export function PremiumScreen() {
         <article>
           <MessageCircle size={20} />
           <strong>WhatsApp</strong>
-          <span>Disponible en el plan Premium al activarlo.</span>
+          <span>Disponible en el plan Premium WhatsApp.</span>
         </article>
         <article>
           <Mail size={20} />
