@@ -41,8 +41,27 @@ alter table public.subscriptions
   drop constraint if exists subscriptions_plan_check;
 
 alter table public.subscriptions
-  add constraint subscriptions_plan_check
-  check (plan in ('free', 'essential_monthly', 'tracking_monthly', 'premium_monthly'));
+add constraint subscriptions_plan_check
+check (plan in ('free', 'essential_monthly', 'tracking_monthly', 'premium_monthly'));
+
+with duplicated_subscriptions as (
+  select
+    id,
+    row_number() over (
+      partition by user_id, plan
+      order by started_at desc nulls last, expires_at desc nulls last, id desc
+    ) as row_position
+  from public.subscriptions
+)
+delete from public.subscriptions
+where id in (
+  select id
+  from duplicated_subscriptions
+  where row_position > 1
+);
+
+create unique index if not exists subscriptions_user_plan_key
+on public.subscriptions(user_id, plan);
 
 create table if not exists public.referral_events (
   id uuid primary key default gen_random_uuid(),
