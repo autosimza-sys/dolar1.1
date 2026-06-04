@@ -61,21 +61,23 @@ cp .env.example .env.local
 Variables:
 
 ```env
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=https://dolarmza.com.ar
 NEXT_PUBLIC_SUPABASE_URL=https://TU-PROYECTO.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key
 SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
-NEXT_PUBLIC_ADMIN_EMAILS=admin@dolarmendoza.app
+NEXT_PUBLIC_ADMIN_EMAILS=autosimza@gmail.com
 MERCADO_PAGO_ACCESS_TOKEN=APP_USR_xxx
 MERCADO_PAGO_PREAPPROVAL_PLAN_ID=
 MERCADO_PAGO_WEBHOOK_SECRET=cambiar-este-secreto
-PREMIUM_MONTHLY_PRICE=3500
+ESSENTIAL_MONTHLY_PRICE=999
+TRACKING_MONTHLY_PRICE=3999
+PREMIUM_MONTHLY_PRICE=149999
 ALERTS_CRON_SECRET=cambiar-este-secreto
 CRON_SECRET=cambiar-este-secreto
 RATES_UPDATE_SECRET=cambiar-este-secreto
 AUTOMATION_SECRET=cambiar-este-secreto
 RESEND_API_KEY=re_xxx
-ALERT_FROM_EMAIL=Dólar Mendoza <alertas@tudominio.com>
+ALERT_FROM_EMAIL=Dolar MZA <alertas@dolarmza.com.ar>
 ```
 
 ## 4. Desplegar en Vercel
@@ -83,7 +85,7 @@ ALERT_FROM_EMAIL=Dólar Mendoza <alertas@tudominio.com>
 1. Subir el repo a GitHub.
 2. Importar el proyecto en Vercel.
 3. Cargar las mismas variables de `.env.local` en `Project Settings > Environment Variables`.
-4. Cambiar `NEXT_PUBLIC_APP_URL` por la URL de producción.
+4. Verificar que `NEXT_PUBLIC_APP_URL` sea `https://dolarmza.com.ar`.
 5. Deploy.
 
 Build command: `npm run build`.
@@ -110,7 +112,7 @@ Flujo:
 En Mercado Pago, configurá la notificación webhook apuntando a:
 
 ```text
-https://TU-DOMINIO.vercel.app/api/mercadopago/webhook?secret=TU_SECRET
+https://dolarmza.com.ar/api/mercadopago/webhook?secret=TU_SECRET
 ```
 
 ## 6. Entrar al admin
@@ -193,7 +195,7 @@ Fuentes incluidas y configurables:
 Para actualizar cada 3 minutos, usar un cron externo como cron-job.org o Upstash QStash llamando:
 
 ```text
-https://TU-DOMINIO/api/automation/run?secret=TU_SECRET
+https://dolarmza.com.ar/api/automation/run?secret=TU_SECRET
 ```
 
 Para que funcione en producción, cargá en Vercel:
@@ -205,13 +207,13 @@ RATES_UPDATE_SECRET=un-secreto-largo
 ALERTS_CRON_SECRET=un-secreto-largo
 AUTOMATION_SECRET=un-secreto-largo
 RESEND_API_KEY=re_xxx
-ALERT_FROM_EMAIL=Dólar Mendoza <alertas@tudominio.com>
+ALERT_FROM_EMAIL=Dolar MZA <alertas@dolarmza.com.ar>
 ```
 
 Prueba manual:
 
 ```bash
-curl "https://TU-DOMINIO/api/automation/run?secret=TU_SECRET"
+curl "https://dolarmza.com.ar/api/automation/run?secret=TU_SECRET"
 ```
 
 Notas:
