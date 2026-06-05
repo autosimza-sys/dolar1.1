@@ -292,8 +292,8 @@ button:disabled {
 .rate-card {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: 12px;
+  padding: 14px;
 }
 
 .rate-card__top,
@@ -311,6 +311,14 @@ button:disabled {
   min-width: 0;
 }
 
+.rate-card__tools {
+  align-items: center;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 7px;
+  position: relative;
+}
+
 .rate-card__flag {
   align-items: center;
   display: inline-flex;
@@ -318,6 +326,56 @@ button:disabled {
   font-size: 18px;
   line-height: 1;
   white-space: nowrap;
+}
+
+.rate-card__star {
+  color: var(--yellow);
+  display: inline-flex;
+  opacity: 0.84;
+}
+
+.rate-card__info {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: var(--gray-text);
+  cursor: help;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  width: 28px;
+}
+
+.rate-card__info span {
+  background: #050505;
+  border: 1px solid rgba(0, 200, 83, 0.36);
+  border-radius: 8px;
+  bottom: calc(100% + 8px);
+  box-shadow: var(--shadow);
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  opacity: 0;
+  padding: 9px 10px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  transform: translateY(4px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  visibility: hidden;
+  width: min(240px, 72vw);
+  z-index: 20;
+}
+
+.rate-card__info:hover span,
+.rate-card__info:focus-visible span {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
 }
 
 .rate-card__flag--compact {
@@ -409,10 +467,15 @@ button:disabled {
 .quote-grid strong {
   display: block;
   font-size: clamp(18px, 5.6vw, 23px);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   min-width: 0;
   overflow: visible;
   white-space: nowrap;
+}
+
+.rate-card__spread {
+  align-self: flex-start;
 }
 
 .muted-line {
@@ -2282,6 +2345,12 @@ textarea {
 @media (min-width: 620px) {
   .app-main {
     padding-top: 28px;
+  }
+
+  .section--main-rates .card-list,
+  .section--travel-rates .card-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hero h1 {

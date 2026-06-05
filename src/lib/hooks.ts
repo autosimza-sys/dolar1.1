@@ -9,6 +9,7 @@ import type { EducationCard, FavoriteRate, Profile, Rate, Subscription, UserAler
 const recoverySessionKey = "dolar_mza_password_recovery";
 const recoveryPendingKey = "dolar_mza_password_recovery_pending";
 const recoveryPendingWindowMs = 2 * 60 * 60 * 1000;
+const ratesCacheKey = "dolar_mza_last_valid_rates";
 
 type LoadState<T> = {
   data: T;
@@ -44,13 +45,37 @@ function isPasswordRecoveryRedirect() {
   return hasRecoveryType || (hasRecoveryMarker && hasRecoveryToken);
 }
 
+function readCachedRates() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(ratesCacheKey);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw) as Rate[];
+    return Array.isArray(parsed) && parsed.length ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedRates(rates: Rate[]) {
+  if (typeof window === "undefined" || !rates.length) return;
+
+  try {
+    window.localStorage.setItem(ratesCacheKey, JSON.stringify(rates));
+  } catch {
+    // Cache is optional; the app can still load from Supabase.
+  }
+}
+
 export function useSupabase() {
   return useMemo(() => createSupabaseBrowserClient(), []);
 }
 
 export function useRates(): LoadState<Rate[]> {
   const supabase = useSupabase();
-  const [data, setData] = useState<Rate[]>(demoRates);
+  const [data, setData] = useState<Rate[]>(supabase ? readCachedRates : demoRates);
   const [isLoading, setIsLoading] = useState(Boolean(supabase));
   const [error, setError] = useState<string | null>(null);
 
@@ -71,10 +96,16 @@ export function useRates(): LoadState<Rate[]> {
 
     if (queryError) {
       setError(queryError.message);
-      setData(demoRates);
+      setData((current) => (current.length ? current : []));
     } else {
       setError(null);
-      setData(rows?.length ? (rows as Rate[]) : demoRates);
+      if (rows?.length) {
+        const nextRates = rows as Rate[];
+        writeCachedRates(nextRates);
+        setData(nextRates);
+      } else {
+        setData((current) => (current.length ? current : []));
+      }
     }
 
     setIsLoading(false);

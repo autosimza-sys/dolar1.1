@@ -64,6 +64,7 @@ export function HomeScreen() {
   const { data: rates, isLoading, error } = useRates();
   const mainRates = pickRates(rates, MAIN_RATE_CODES);
   const travelRates = pickRates(rates, TRAVEL_RATE_CODES);
+  const hasRates = rates.length > 0;
 
   return (
     <div className="screen screen--home">
@@ -85,10 +86,11 @@ export function HomeScreen() {
         </div>
       </section>
 
-      {error ? <p className="notice">Mostrando datos demo hasta conectar Supabase.</p> : null}
-      {isLoading ? <p className="loading-line">Cargando cotizaciones...</p> : null}
+      {isLoading || !hasRates ? <p className="loading-line">Actualizando cotizaciones...</p> : null}
+      {error && !hasRates ? <p className="notice">No pudimos cargar datos reales todavÃ­a. ReintentÃ¡ en unos segundos.</p> : null}
 
-      <section className="section section--main-rates">
+      {hasRates ? (
+        <section className="section section--main-rates">
         <div className="section-heading">
           <div>
             <p className="eyebrow">Principales</p>
@@ -103,9 +105,11 @@ export function HomeScreen() {
             <RateCard rate={rate} key={rate.code} />
           ))}
         </div>
-      </section>
+        </section>
+      ) : null}
 
-      <section className="section section--travel-rates">
+      {hasRates ? (
+        <section className="section section--travel-rates">
         <div className="section-heading">
           <div>
             <p className="eyebrow">Frontera y viajes</p>
@@ -117,9 +121,10 @@ export function HomeScreen() {
             <RateCard rate={rate} key={rate.code} />
           ))}
         </div>
-      </section>
+        </section>
+      ) : null}
 
-      <ArgentinaToday rates={rates} />
+      {hasRates ? <ArgentinaToday rates={rates} /> : null}
 
       <CommunityReports />
 
