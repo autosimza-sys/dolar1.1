@@ -28,7 +28,8 @@ type AdminAction =
   | "invalidate_referral"
   | "apply_manual_credit"
   | "test_email"
-  | "test_mercado_pago_config";
+  | "test_mercado_pago_config"
+  | "resolve_support_message";
 
 type AdminActionBody = {
   action?: AdminAction;
@@ -390,6 +391,17 @@ export async function POST(request: NextRequest) {
         message: result.skipped ? `No se envio: ${result.reason}` : "Email de prueba enviado correctamente.",
         result
       });
+    }
+
+    if (body.action === "resolve_support_message") {
+      const supportId = requireString(body.payload?.id, "id de soporte");
+      const { error } = await supabaseAdmin
+        .from("support_messages")
+        .update({ status: "resolved", resolved_at: new Date().toISOString() })
+        .eq("id", supportId);
+
+      if (error) throw error;
+      return NextResponse.json({ ok: true, message: "Mensaje de soporte resuelto." });
     }
 
     if (body.action === "test_mercado_pago_config") {

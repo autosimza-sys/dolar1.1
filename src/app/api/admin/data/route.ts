@@ -93,6 +93,12 @@ export async function GET() {
     supabaseAdmin.from("referral_credit_ledger").select("*").order("created_at", { ascending: false }).limit(120)
   ]);
 
+  const supportMessages = await supabaseAdmin
+    .from("support_messages")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(80);
+
   const firstError =
     rates.error ??
     profiles.error ??
@@ -126,6 +132,7 @@ export async function GET() {
     paymentEvents: paymentEvents.error ? [] : (paymentEvents.data ?? []),
     referralEvents: referralEvents.error ? [] : (referralEvents.data ?? []),
     referralCreditLedger: referralCreditLedger.error ? [] : (referralCreditLedger.data ?? []),
+    supportMessages: supportMessages.error ? [] : (supportMessages.data ?? []),
     blueMendozaManual: blueMendozaManual.data?.value ?? null,
     communityFiltersEnabled: communityFilters.data?.value !== false,
     systemStatus: {

@@ -48,6 +48,7 @@ import type {
   ReferralEvent,
   SourceUpdateLog,
   Subscription,
+  SupportMessage,
   UserAlert
 } from "@/lib/types";
 
@@ -76,6 +77,7 @@ type AdminData = {
   paymentEvents: PaymentEvent[];
   referralEvents: ReferralEvent[];
   referralCreditLedger: ReferralCreditLedger[];
+  supportMessages: SupportMessage[];
   systemStatus: SystemStatus;
   blueMendozaManual: {
     enabled?: boolean;
@@ -124,6 +126,7 @@ const emptyAdminData: AdminData = {
   paymentEvents: [],
   referralEvents: [],
   referralCreditLedger: [],
+  supportMessages: [],
   systemStatus: emptySystemStatus,
   blueMendozaManual: null,
   communityFiltersEnabled: true
@@ -459,6 +462,7 @@ export function AdminScreen() {
         paymentEvents: adminData.paymentEvents ?? [],
         referralEvents: adminData.referralEvents ?? [],
         referralCreditLedger: adminData.referralCreditLedger ?? [],
+        supportMessages: adminData.supportMessages ?? [],
         systemStatus: adminData.systemStatus ?? emptySystemStatus,
         blueMendozaManual: adminData.blueMendozaManual ?? null,
         communityFiltersEnabled: adminData.communityFiltersEnabled !== false
@@ -631,6 +635,14 @@ export function AdminScreen() {
       "Credito manual aplicado."
     );
     form.reset();
+  }
+
+  async function resolveSupportMessage(message: SupportMessage) {
+    await runPanelAction(
+      `support:${message.id}`,
+      { action: "resolve_support_message", payload: { id: message.id } },
+      "Mensaje de soporte resuelto."
+    );
   }
 
   const isActionLoading = (key: string) => actionLoading === key;
@@ -1409,7 +1421,45 @@ export function AdminScreen() {
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Soporte</p>
-                <h2>Problemas a revisar</h2>
+                <h2>Mensajes de usuarios</h2>
+              </div>
+            </div>
+            <div className="admin-list">
+              {data.supportMessages.map((item) => (
+                <article key={item.id}>
+                  <LifeBuoy size={18} />
+                  <div>
+                    <strong>
+                      {item.reason} / {item.status === "resolved" ? "resuelto" : "nuevo"}
+                    </strong>
+                    <span>
+                      {item.email} / {formatDateTime(item.created_at)}
+                    </span>
+                    <small>{item.message}</small>
+                  </div>
+                  {item.status !== "resolved" ? (
+                    <div className="admin-actions-inline">
+                      <button
+                        className="button button--ghost"
+                        disabled={isActionLoading(`support:${item.id}`)}
+                        type="button"
+                        onClick={() => resolveSupportMessage(item)}
+                      >
+                        <Check size={15} />
+                        Resolver
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+              {!data.supportMessages.length ? <div className="empty-state">Todavia no hay mensajes de soporte.</div> : null}
+            </div>
+          </div>
+          <div className="admin-panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Errores</p>
+                <h2>Alertas fallidas</h2>
               </div>
             </div>
             <div className="admin-list">
@@ -1428,9 +1478,7 @@ export function AdminScreen() {
                 ))}
               {failedJobs === 0 ? <div className="empty-state">No hay alertas con error en los ultimos trabajos cargados.</div> : null}
             </div>
-          </div>
-          <div className="admin-panel">
-            <div className="section-heading">
+            <div className="section-heading section-heading--stacked">
               <div>
                 <p className="eyebrow">Cuentas</p>
                 <h2>Atencion comercial</h2>

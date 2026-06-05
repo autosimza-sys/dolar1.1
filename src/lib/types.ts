@@ -247,3 +247,17 @@ export type ReferralSummary = {
     expires_at: string | null;
   }>;
 };
+
+export type SupportMessageStatus = "new" | "resolved";
+
+export type SupportMessage = {
+  id: string;
+  user_id: string | null;
+  name: string;
+  email: string;
+  reason: string;
+  message: string;
+  status: SupportMessageStatus;
+  created_at: string;
+  resolved_at: string | null;
+};

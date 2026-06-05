@@ -2,13 +2,15 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Copy, Crown, Gift, LogOut, MessageCircle, Pencil, ShieldCheck, Star, Trash2 } from "lucide-react";
+import { Bell, Copy, Crown, Gift, LifeBuoy, LogOut, MessageCircle, Pencil, Send, ShieldCheck, Star, Trash2 } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_TYPES } from "@/lib/constants";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { getAdminEmails, useAccount, useRates } from "@/lib/hooks";
 import type { AlertLog, ReferralSummary, UserAlert } from "@/lib/types";
+
+const supportReasons = ["Problema con mi cuenta", "Problema con contrasena", "Problema con alertas", "Problema con pago", "Otro"];
 
 function alertLabel(alert: UserAlert) {
   return ALERT_TYPES.find((type) => type.value === alert.condition_type)?.label ?? alert.condition_type;
@@ -42,6 +44,15 @@ export function AccountScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [isSendingSupport, setIsSendingSupport] = useState(false);
+  const [supportStatus, setSupportStatus] = useState<string | null>(null);
+  const [supportForm, setSupportForm] = useState({
+    name: "",
+    email: "",
+    reason: supportReasons[0],
+    message: ""
+  });
   const planLabel = subscriptionLabel(account.subscription?.plan, account.subscription?.status, account.isPremium);
   const adminEmails = useMemo(() => getAdminEmails(), []);
 
@@ -130,6 +141,16 @@ export function AccountScreen() {
     void checkAdminAccess();
   }, [account.supabase, account.user, adminEmails]);
 
+  useEffect(() => {
+    if (!account.user) return;
+
+    setSupportForm((current) => ({
+      ...current,
+      name: current.name || account.profile?.full_name || "",
+      email: current.email || account.user?.email || ""
+    }));
+  }, [account.profile?.full_name, account.user]);
+
   async function signOut() {
     if (!account.supabase) return;
     await account.supabase.auth.signOut();
@@ -185,6 +206,46 @@ export function AccountScreen() {
     return `https://wa.me/?text=${encodeURIComponent(text)}`;
   }
 
+  async function sendSupportMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSupportStatus(null);
+
+    if (!supportForm.name.trim()) {
+      setSupportStatus("Ingresa tu nombre.");
+      return;
+    }
+
+    if (!supportForm.email.trim()) {
+      setSupportStatus("Ingresa tu email.");
+      return;
+    }
+
+    if (supportForm.message.trim().length < 8) {
+      setSupportStatus("Contanos un poco mas para poder ayudarte.");
+      return;
+    }
+
+    setIsSendingSupport(true);
+    const response = await fetch("/api/support/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(supportForm)
+    });
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+
+    setIsSendingSupport(false);
+
+    if (!response.ok) {
+      setSupportStatus(payload.error ?? "No se pudo enviar el mensaje. Proba nuevamente.");
+      return;
+    }
+
+    setSupportStatus("Mensaje enviado correctamente.");
+    setSupportForm((current) => ({ ...current, message: "" }));
+  }
+
   if (account.isLoading) {
     return (
       <div className="screen">
@@ -235,6 +296,68 @@ export function AccountScreen() {
           </Link>
         </section>
       ) : null}
+
+      <section className="support-panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Soporte</p>
+            <h2>Te damos una mano</h2>
+          </div>
+          <LifeBuoy size={22} />
+        </div>
+        <p>Si algo no funciona, mandanos un mensaje desde aca.</p>
+        <button className="button button--ghost" type="button" onClick={() => setSupportOpen((current) => !current)}>
+          <LifeBuoy size={17} />
+          {supportOpen ? "Cerrar soporte" : "Abrir soporte"}
+        </button>
+
+        {supportOpen ? (
+          <form className="support-form" onSubmit={sendSupportMessage}>
+            <label className="field">
+              <span>Nombre</span>
+              <input
+                value={supportForm.name}
+                onChange={(event) => setSupportForm((current) => ({ ...current, name: event.target.value }))}
+              />
+            </label>
+            <label className="field">
+              <span>Email</span>
+              <input
+                autoComplete="email"
+                type="email"
+                value={supportForm.email}
+                onChange={(event) => setSupportForm((current) => ({ ...current, email: event.target.value }))}
+              />
+            </label>
+            <label className="field">
+              <span>Motivo</span>
+              <select
+                value={supportForm.reason}
+                onChange={(event) => setSupportForm((current) => ({ ...current, reason: event.target.value }))}
+              >
+                {supportReasons.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Mensaje</span>
+              <textarea
+                rows={4}
+                value={supportForm.message}
+                onChange={(event) => setSupportForm((current) => ({ ...current, message: event.target.value }))}
+              />
+            </label>
+            {supportStatus ? <p className="form-message">{supportStatus}</p> : null}
+            <button className="button button--full" disabled={isSendingSupport} type="submit">
+              <Send size={17} />
+              {isSendingSupport ? "Enviando..." : "Enviar mensaje"}
+            </button>
+          </form>
+        ) : null}
+      </section>
 
       <section className="referral-panel">
         <div className="section-heading">

@@ -44,7 +44,8 @@ a {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -810,7 +811,8 @@ button:disabled {
 }
 
 select,
-input {
+input,
+textarea {
   background: #0b0c0b;
   border: 1px solid var(--gray-border);
   border-radius: var(--radius);
@@ -822,8 +824,15 @@ input {
 }
 
 select:focus,
-input:focus {
+input:focus,
+textarea:focus {
   border-color: var(--green);
+}
+
+textarea {
+  line-height: 1.4;
+  min-height: 112px;
+  resize: vertical;
 }
 
 .option-list {
@@ -1643,6 +1652,33 @@ input:focus {
   flex: 0 0 auto;
 }
 
+.support-panel {
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+}
+
+.support-panel > p {
+  color: var(--gray-text);
+  line-height: 1.42;
+  margin: 0;
+}
+
+.support-panel > .section-heading svg {
+  color: var(--green);
+  flex: 0 0 auto;
+}
+
+.support-form {
+  display: grid;
+  gap: 12px;
+}
+
+.section-heading--stacked {
+  align-items: flex-start;
+  margin-top: 18px;
+}
+
 .referral-link-box {
   align-items: center;
   background: rgba(0, 0, 0, 0.25);
@@ -1741,6 +1777,7 @@ input:focus {
   display: grid;
   gap: 12px;
   min-height: 190px;
+  overflow: visible;
   padding: 14px;
   text-align: left;
 }
@@ -1777,7 +1814,7 @@ input:focus {
 .favorite-quotes {
   display: grid;
   gap: 8px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(116px, 1fr));
   width: 100%;
 }
 
@@ -1788,6 +1825,7 @@ input:focus {
   display: grid;
   gap: 5px;
   min-width: 0;
+  overflow: visible;
   padding: clamp(8px, 2.4vw, 10px);
 }
 
@@ -1801,8 +1839,11 @@ input:focus {
 
 .favorite-quotes b {
   color: var(--white);
+  display: inline-block;
   font-size: clamp(17px, 5vw, 22px);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
+  max-width: 100%;
   overflow: visible;
   white-space: nowrap;
 }
@@ -2047,7 +2088,7 @@ input:focus {
   }
 
   .favorites-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .referral-actions {
