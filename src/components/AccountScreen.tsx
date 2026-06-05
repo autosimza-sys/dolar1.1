@@ -2,13 +2,13 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Copy, Crown, Gift, LifeBuoy, LogOut, MessageCircle, Pencil, Send, ShieldCheck, Star, Trash2 } from "lucide-react";
+import { Bell, BookOpen, Crown, Gift, LifeBuoy, LogOut, MessageCircle, Send, ShieldCheck } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_TYPES } from "@/lib/constants";
 import { formatDateTime, formatMoney } from "@/lib/format";
-import { getAdminEmails, useAccount, useRates } from "@/lib/hooks";
-import type { AlertLog, ReferralSummary, UserAlert } from "@/lib/types";
+import { getAdminEmails, useAccount, useEducationCards, useRates } from "@/lib/hooks";
+import type { Rate, ReferralSummary, UserAlert } from "@/lib/types";
 
 const supportReasons = ["Problema con mi cuenta", "Problema con contrasena", "Problema con alertas", "Problema con pago", "Otro"];
 
@@ -16,19 +16,40 @@ function alertLabel(alert: UserAlert) {
   return ALERT_TYPES.find((type) => type.value === alert.condition_type)?.label ?? alert.condition_type;
 }
 
-function spreadLabel(buy: number | null, sell: number | null) {
-  if (buy === null || sell === null) return "Spread sin datos";
-  return `Spread ${formatMoney(sell - buy, true)}`;
+function alertTargetLabel(alert: UserAlert) {
+  const type = ALERT_TYPES.find((item) => item.value === alert.condition_type);
+
+  if (type?.targetSuffix === "hora") return "";
+  if (type?.targetSuffix === "%") return `${alert.target_value}%`;
+  return formatMoney(alert.target_value, true);
+}
+
+function accountAlertTitle(alert: UserAlert, rate?: Rate) {
+  const name = rate?.name ?? alert.rate_code;
+  const target = alertTargetLabel(alert);
+
+  if (alert.condition_type === "above") return `${name} > ${target}`;
+  if (alert.condition_type === "below" || alert.condition_type === "mep_below") return `${name} < ${target}`;
+  if (target) return `${alertLabel(alert)} ${target}`;
+  return alertLabel(alert);
 }
 
 function subscriptionLabel(plan?: string, status?: string, isPremium?: boolean) {
   if (status === "trial") return "Prueba gratis";
-  if (status === "grace") return "Período de gracia";
+  if (status === "grace") return "Periodo de gracia";
   if (status !== "active" && !isPremium) return "Gratis";
   if (plan === "essential_monthly") return "Esencial";
   if (plan === "tracking_monthly") return "Seguimiento";
   if (plan === "premium_monthly" || isPremium) return "Premium WhatsApp";
   return "Gratis";
+}
+
+function accountStatusLabel(emailConfirmedAt?: string | null) {
+  return emailConfirmedAt ? "Email confirmado" : "Email pendiente";
+}
+
+function nextExpirationLabel(expiresAt?: string | null) {
+  return expiresAt ? formatDateTime(expiresAt) : "Sin vencimiento";
 }
 
 function parseAdminEmails(value: unknown) {
@@ -39,7 +60,7 @@ function parseAdminEmails(value: unknown) {
 export function AccountScreen() {
   const account = useAccount();
   const { data: rates } = useRates();
-  const [logs, setLogs] = useState<AlertLog[]>([]);
+  const education = useEducationCards();
   const [message, setMessage] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
@@ -56,26 +77,18 @@ export function AccountScreen() {
   const planLabel = subscriptionLabel(account.subscription?.plan, account.subscription?.status, account.isPremium);
   const adminEmails = useMemo(() => getAdminEmails(), []);
 
-  const favoriteCodes = useMemo(() => new Set(account.favorites.map((favorite) => favorite.rate_code)), [account.favorites]);
-
-  useEffect(() => {
-    async function loadLogs() {
-      if (!account.supabase || !account.user) {
-        setLogs([]);
-        return;
-      }
-
-      const { data } = await account.supabase
-        .from("alert_logs")
-        .select("*")
-        .eq("user_id", account.user.id)
-        .order("sent_at", { ascending: false })
-        .limit(10);
-      setLogs((data as AlertLog[] | null) ?? []);
-    }
-
-    void loadLogs();
-  }, [account.supabase, account.user]);
+  const rateByCode = useMemo(() => new Map(rates.map((rate) => [rate.code, rate])), [rates]);
+  const activeAlerts = useMemo(() => account.alerts.filter((alert) => alert.is_active), [account.alerts]);
+  const latestAlerts = useMemo(() => account.alerts.slice(0, 3), [account.alerts]);
+  const favoriteRates = useMemo(
+    () =>
+      account.favorites
+        .map((favorite) => rateByCode.get(favorite.rate_code))
+        .filter((rate): rate is Rate => Boolean(rate))
+        .slice(0, 4),
+    [account.favorites, rateByCode]
+  );
+  const recommendedArticle = education.data[0];
 
   useEffect(() => {
     if (!account.user || typeof window === "undefined") return;
@@ -99,7 +112,7 @@ export function AccountScreen() {
 
       if (!response.ok) {
         setReferralSummary(null);
-        setReferralError(payload.error ?? "Referidos pendiente de configuración.");
+        setReferralError(payload.error ?? "Referidos pendiente de configuracion.");
         return;
       }
 
@@ -157,42 +170,6 @@ export function AccountScreen() {
     await account.reload();
   }
 
-  async function updateAlert(alert: UserAlert, event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!account.supabase) return;
-
-    const formData = new FormData(event.currentTarget);
-    const { error } = await account.supabase
-      .from("alerts")
-      .update({
-        target_value: Number(formData.get("target_value")),
-        is_active: formData.get("is_active") === "on"
-      })
-      .eq("id", alert.id);
-
-    setMessage(error ? error.message : "Alerta actualizada.");
-    await account.reload();
-  }
-
-  async function deleteAlert(alertId: string) {
-    if (!account.supabase) return;
-    const { error } = await account.supabase.from("alerts").delete().eq("id", alertId);
-    setMessage(error ? error.message : "Alerta eliminada.");
-    await account.reload();
-  }
-
-  async function toggleFavorite(rateCode: string) {
-    if (!account.supabase || !account.user) return;
-
-    const existing = account.favorites.find((favorite) => favorite.rate_code === rateCode);
-    if (existing) {
-      await account.supabase.from("favorite_rates").delete().eq("id", existing.id);
-    } else {
-      await account.supabase.from("favorite_rates").insert({ user_id: account.user.id, rate_code: rateCode });
-    }
-    await account.reload();
-  }
-
   async function copyReferralLink() {
     if (!referralSummary?.referral_link) return;
 
@@ -202,7 +179,7 @@ export function AccountScreen() {
 
   function whatsappReferralLink() {
     const link = referralSummary?.referral_link ?? "";
-    const text = `Te invito a Dólar MZA. Cotizaciones, educación financiera y alertas para estar un paso antes: ${link}`;
+    const text = `Te invito a Dolar MZA. Cotizaciones, educacion financiera y alertas para estar un paso antes: ${link}`;
     return `https://wa.me/?text=${encodeURIComponent(text)}`;
   }
 
@@ -259,8 +236,8 @@ export function AccountScreen() {
       <div className="screen">
         <section className="page-header">
           <p className="eyebrow">Cuenta</p>
-          <h1>Guardá tus alertas</h1>
-          <p>Creá tu cuenta gratis para activar una alerta y probar la app.</p>
+          <h1>Guarda tus alertas</h1>
+          <p>Crea tu cuenta gratis para activar una alerta y probar la app.</p>
         </section>
         <div className="panel">
           <AuthForm onSuccess={account.reload} />
@@ -270,25 +247,46 @@ export function AccountScreen() {
   }
 
   return (
-    <div className="screen">
-      <section className="account-top">
-        <div>
-          <p className="eyebrow">Cuenta</p>
-          <h1>{account.profile?.full_name || account.user.email}</h1>
-          <span className={planLabel !== "Gratis" ? "status status--premium" : "status"}>{planLabel}</span>
+    <div className="screen screen--account">
+      <section className="account-panel account-profile-card">
+        <div className="account-panel__head">
+          <div>
+            <p className="eyebrow">Mi cuenta</p>
+            <h1>{account.profile?.full_name || account.user.email}</h1>
+          </div>
+          <button className="icon-button" aria-label="Salir" type="button" onClick={signOut}>
+            <LogOut size={20} />
+          </button>
         </div>
-        <button className="icon-button" aria-label="Salir" type="button" onClick={signOut}>
-          <LogOut size={20} />
-        </button>
+
+        <div className="account-meta-grid">
+          <article>
+            <span>Plan actual</span>
+            <strong>{planLabel}</strong>
+          </article>
+          <article>
+            <span>Estado</span>
+            <strong>{accountStatusLabel(account.user.email_confirmed_at)}</strong>
+          </article>
+          <article>
+            <span>Proximo vencimiento</span>
+            <strong>{nextExpirationLabel(account.subscription?.expires_at)}</strong>
+          </article>
+        </div>
+
+        <Link className="button button--premium button--full" href="/premium">
+          <Crown size={17} />
+          Mejorar plan
+        </Link>
       </section>
 
-      {message ? <p className="notice">{message}</p> : null}
+      {message ? <p className="notice account-notice">{message}</p> : null}
 
       {isAdmin ? (
-        <section className="admin-access-strip">
+        <section className="admin-access-strip account-admin-strip">
           <div>
             <strong>Administracion</strong>
-            <span>Panel privado para cotizaciones, fuentes y comunidad.</span>
+            <span>Panel privado para gestionar la app.</span>
           </div>
           <Link className="button button--ghost" href="/admin">
             <ShieldCheck size={17} />
@@ -297,18 +295,138 @@ export function AccountScreen() {
         </section>
       ) : null}
 
-      <section className="support-panel">
-        <div className="section-heading">
+      <section className="account-panel account-alerts-panel">
+        <div className="account-panel__head">
+          <div>
+            <p className="eyebrow">Mis alertas</p>
+            <h2>{activeAlerts.length} activas</h2>
+          </div>
+          <Bell size={22} />
+        </div>
+
+        <div className="account-summary-list">
+          {latestAlerts.length ? (
+            latestAlerts.map((alert) => (
+              <article key={alert.id}>
+                <Bell size={16} />
+                <div>
+                  <strong>{accountAlertTitle(alert, rateByCode.get(alert.rate_code))}</strong>
+                  <span>{alert.is_active ? "Activa" : "Pausada"}</span>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="empty-state">Todavia no tenes alertas configuradas.</div>
+          )}
+        </div>
+
+        <div className="account-actions">
+          <Link className="button" href="/alerts">
+            Nueva alerta
+          </Link>
+          <Link className="button button--ghost" href="/alerts">
+            Ver todas
+          </Link>
+        </div>
+      </section>
+
+      <section className="account-panel account-favorites-panel">
+        <div className="account-panel__head">
+          <div>
+            <p className="eyebrow">Mis favoritos</p>
+            <h2>Monedas rapidas</h2>
+          </div>
+        </div>
+
+        <div className="account-favorites-list">
+          {favoriteRates.length ? (
+            favoriteRates.map((rate) => (
+              <article className="account-favorite-row" key={rate.code}>
+                <FlagBadge compact rate={rate} />
+                <div>
+                  <strong>{rate.name}</strong>
+                  <span>
+                    {formatMoney(rate.buy_price, true)} / {formatMoney(rate.sell_price, true)}
+                  </span>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="empty-state">Todavia no elegiste monedas favoritas.</div>
+          )}
+        </div>
+
+        <Link className="button button--ghost button--full" href="/">
+          Ver todas las cotizaciones
+        </Link>
+      </section>
+
+      <section className="account-panel account-education-panel">
+        <div className="account-panel__head">
+          <div>
+            <p className="eyebrow">Educacion financiera</p>
+            <h2>Articulo recomendado</h2>
+          </div>
+          <BookOpen size={22} />
+        </div>
+
+        <article className="account-education-card">
+          <strong>{recommendedArticle?.title ?? "Que es la brecha cambiaria"}</strong>
+          <span>{recommendedArticle?.content ?? "Una guia simple para entender la diferencia entre el dolar oficial y el blue."}</span>
+          <Link className="button button--ghost" href="/learn">
+            Leer articulo
+          </Link>
+        </article>
+      </section>
+
+      <section className="account-panel account-referral-compact">
+        <div className="account-panel__head">
+          <div>
+            <p className="eyebrow">Referidos</p>
+            <h2>Credito y puntos</h2>
+          </div>
+          <Gift size={22} />
+        </div>
+
+        {referralSummary ? (
+          <>
+            <div className="account-meta-grid account-meta-grid--two">
+              <article>
+                <span>Credito acumulado</span>
+                <strong>{formatMoney(referralSummary.credit_available, true)}</strong>
+              </article>
+              <article>
+                <span>Puntos acumulados</span>
+                <strong>{referralSummary.points_active}</strong>
+              </article>
+            </div>
+            <div className="account-actions account-actions--single">
+              <button className="button button--ghost" type="button" onClick={copyReferralLink}>
+                Copiar link
+              </button>
+              <a className="button" href={whatsappReferralLink()} target="_blank" rel="noreferrer">
+                <MessageCircle size={17} />
+                Compartir
+              </a>
+            </div>
+          </>
+        ) : (
+          <div className="empty-state">{referralError ?? "Preparando tu link de referido..."}</div>
+        )}
+      </section>
+
+      <section className="account-panel support-panel account-support-panel">
+        <div className="account-panel__head">
           <div>
             <p className="eyebrow">Soporte</p>
-            <h2>Te damos una mano</h2>
+            <h2>Necesitas ayuda?</h2>
           </div>
           <LifeBuoy size={22} />
         </div>
-        <p>Si algo no funciona, mandanos un mensaje desde aca.</p>
-        <button className="button button--ghost" type="button" onClick={() => setSupportOpen((current) => !current)}>
+
+        <button className="button button--ghost button--full" type="button" onClick={() => setSupportOpen((current) => !current)}>
           <LifeBuoy size={17} />
-          {supportOpen ? "Cerrar soporte" : "Abrir soporte"}
+          {supportOpen ? "Cerrar soporte" : "Contactar soporte"}
         </button>
 
         {supportOpen ? (
@@ -357,181 +475,6 @@ export function AccountScreen() {
             </button>
           </form>
         ) : null}
-      </section>
-
-      <section className="referral-panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Referidos</p>
-            <h2>Invitá amigos y acumulá crédito</h2>
-          </div>
-          <Gift size={22} />
-        </div>
-        <p>Invitá amigos a Dólar MZA y reducí el costo de tu suscripción.</p>
-
-        {referralSummary ? (
-          <>
-            <div className="referral-link-box">
-              <span>{referralSummary.referral_link}</span>
-              <button className="icon-button" aria-label="Copiar link" type="button" onClick={copyReferralLink}>
-                <Copy size={18} />
-              </button>
-            </div>
-            <div className="referral-actions">
-              <button className="button button--ghost" type="button" onClick={copyReferralLink}>
-                <Copy size={17} />
-                Copiar link
-              </button>
-              <a className="button" href={whatsappReferralLink()} target="_blank" rel="noreferrer">
-                <MessageCircle size={17} />
-                Compartir por WhatsApp
-              </a>
-            </div>
-            <div className="referral-stats">
-              <article>
-                <span>Nivel</span>
-                <strong>{referralSummary.level}</strong>
-              </article>
-              <article>
-                <span>Puntos activos</span>
-                <strong>{referralSummary.points_active}</strong>
-              </article>
-              <article>
-                <span>Crédito disponible</span>
-                <strong>{formatMoney(referralSummary.credit_available, true)}</strong>
-              </article>
-              <article>
-                <span>Referidos válidos</span>
-                <strong>{referralSummary.referrals_valid}</strong>
-              </article>
-            </div>
-            <small className="spread-line">
-              Pendientes: {referralSummary.referrals_pending} · Próximo vencimiento:{" "}
-              {referralSummary.next_expiration ? formatDateTime(referralSummary.next_expiration) : "sin vencimientos próximos"}
-            </small>
-          </>
-        ) : (
-          <div className="empty-state">{referralError ?? "Preparando tu link de referido..."}</div>
-        )}
-      </section>
-
-      <section className="section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Mis alertas activas</p>
-            <h2>Lo que estamos mirando</h2>
-          </div>
-          <Link className="text-link" href="/alerts">
-            <Bell size={16} />
-            Nueva
-          </Link>
-        </div>
-
-        <div className="card-list">
-          {account.alerts.length ? (
-            account.alerts.map((alert) => (
-              <form className="account-alert" key={alert.id} onSubmit={(event) => updateAlert(alert, event)}>
-                <div>
-                  <span>{alert.rate_code}</span>
-                  <strong>{alertLabel(alert)}</strong>
-                  <small>
-                    {alert.channel} · {formatDateTime(alert.created_at)}
-                  </small>
-                </div>
-                <label className="field field--tight">
-                  <span>Valor</span>
-                  <input defaultValue={alert.target_value} name="target_value" type="number" step="0.01" />
-                </label>
-                <label className="toggle-line">
-                  <input defaultChecked={alert.is_active} name="is_active" type="checkbox" />
-                  Activa
-                </label>
-                <div className="button-row">
-                  <button className="button button--ghost" type="submit">
-                    <Pencil size={16} />
-                    Guardar
-                  </button>
-                  <button className="button button--danger" type="button" onClick={() => deleteAlert(alert.id)}>
-                    <Trash2 size={16} />
-                    Eliminar
-                  </button>
-                </div>
-              </form>
-            ))
-          ) : (
-            <div className="empty-state">Todavía no tenés alertas activas.</div>
-          )}
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Favoritas</p>
-            <h2>Monedas rápidas</h2>
-          </div>
-        </div>
-        <div className="favorites-grid">
-          {rates
-            .filter((rate) => rate.type !== "indicator")
-            .map((rate) => (
-              <button
-                className={`favorite-button ${favoriteCodes.has(rate.code) ? "is-selected" : ""}`}
-                key={rate.code}
-                type="button"
-                onClick={() => toggleFavorite(rate.code)}
-              >
-                <span className="favorite-button__top">
-                  <FlagBadge compact rate={rate} />
-                  <span>
-                    <strong>{rate.name}</strong>
-                    <small>{rate.country}</small>
-                  </span>
-                  <Star size={17} />
-                </span>
-                <span className="favorite-quotes">
-                  <span>
-                    <em>Compra</em>
-                    <b>{formatMoney(rate.buy_price, true)}</b>
-                  </span>
-                  <span>
-                    <em>Venta</em>
-                    <b>{formatMoney(rate.sell_price, true)}</b>
-                  </span>
-                </span>
-                <small className="spread-line">{spreadLabel(rate.buy_price, rate.sell_price)}</small>
-              </button>
-            ))}
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Historial</p>
-            <h2>Alertas recibidas</h2>
-          </div>
-        </div>
-        <div className="timeline">
-          {logs.length ? (
-            logs.map((log) => (
-              <article key={log.id}>
-                <strong>{log.message}</strong>
-                <span>{formatDateTime(log.sent_at)}</span>
-              </article>
-            ))
-          ) : (
-            <div className="empty-state">Cuando se dispare una alerta, aparece acá.</div>
-          )}
-        </div>
-      </section>
-
-      <section className="premium-strip">
-        <p>Estado de suscripción: {planLabel}</p>
-        <Link className="button button--premium" href="/premium">
-          <Crown size={17} />
-          Premium
-        </Link>
       </section>
     </div>
   );
