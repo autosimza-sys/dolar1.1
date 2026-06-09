@@ -11,6 +11,7 @@ type ConsentState = {
 };
 
 const storageKey = "dolar_mza_cookie_consent";
+const consentEventName = "dolar_mza_cookie_consent_changed";
 const defaultConsent: ConsentState = { necessary: true, analytics: false, marketing: false };
 
 function readConsent(): ConsentState | null {
@@ -121,8 +122,9 @@ export function CookieConsent() {
     };
   }, [consent]);
 
-  function applyConsent(nextConsent: ConsentState, eventName: string) {
+function applyConsent(nextConsent: ConsentState, eventName: string) {
     saveConsent(nextConsent);
+    window.dispatchEvent(new CustomEvent(consentEventName, { detail: nextConsent }));
     setConsent(nextConsent);
     setDraft(nextConsent);
     setIsOpen(false);
