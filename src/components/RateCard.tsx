@@ -32,7 +32,21 @@ function maskedMoney(value: number | null) {
     .join("")}`;
 }
 
-export function RateCard({ rate, preview = false }: { rate: Rate; preview?: boolean }) {
+type RateCardProps = {
+  rate: Rate;
+  preview?: boolean;
+  isFavorite?: boolean;
+  isFavoriteLoading?: boolean;
+  onToggleFavorite?: (rate: Rate) => void;
+};
+
+export function RateCard({
+  rate,
+  preview = false,
+  isFavorite = false,
+  isFavoriteLoading = false,
+  onToggleFavorite
+}: RateCardProps) {
   const isUp = rate.variation >= 0;
   const TrendIcon = isUp ? TrendingUp : TrendingDown;
   const helper = BLUE_HELPERS[rate.code];
@@ -56,9 +70,27 @@ export function RateCard({ rate, preview = false }: { rate: Rate; preview?: bool
               <span role="tooltip">{helper}</span>
             </button>
           ) : null}
-          <span className="rate-card__star" aria-hidden="true">
-            <Star size={15} />
-          </span>
+          <button
+            className={`rate-card__star ${isFavorite ? "is-selected" : ""}`}
+            aria-label={isFavorite ? `Quitar ${rate.name} de favoritas` : `Agregar ${rate.name} a favoritas`}
+            aria-pressed={isFavorite}
+            disabled={isFavoriteLoading}
+            style={{
+              alignItems: "center",
+              background: "transparent",
+              border: 0,
+              cursor: isFavoriteLoading ? "wait" : "pointer",
+              height: 28,
+              justifyContent: "center",
+              opacity: isFavorite ? 1 : 0.68,
+              padding: 0,
+              width: 28
+            }}
+            type="button"
+            onClick={() => onToggleFavorite?.(rate)}
+          >
+            <Star fill={isFavorite ? "currentColor" : "none"} size={16} />
+          </button>
           <span className={`pill ${isUp ? "pill--green" : "pill--red"}`}>
             <TrendIcon size={14} />
             {formatPercent(rate.variation)}
