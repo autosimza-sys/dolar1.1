@@ -11,6 +11,7 @@ import {
   Heart,
   LockKeyhole,
   Sparkles,
+  Star,
   UserRound
 } from "lucide-react";
 import { AuthModal } from "@/components/AuthModal";
@@ -49,7 +50,13 @@ function pickRates(rates: Rate[], codes: string[]) {
   return codes.map((code) => rates.find((rate) => rate.code === code)).filter(Boolean) as Rate[];
 }
 
-function ArgentinaToday({ rates }: { rates: Rate[] }) {
+type FavoriteControls = {
+  favoriteCodes: Set<string>;
+  favoriteLoadingCode: string | null;
+  onToggleFavorite: (rate: Rate) => void;
+};
+
+function ArgentinaToday({ rates, favoriteCodes, favoriteLoadingCode, onToggleFavorite }: { rates: Rate[] } & FavoriteControls) {
   const indicators = pickRates(rates, INDICATOR_CODES);
   const latest = indicators.reduce<string | null>((current, rate) => {
     if (!current) return rate.updated_at;
@@ -63,7 +70,37 @@ function ArgentinaToday({ rates }: { rates: Rate[] }) {
       <div className="today-grid">
         {indicators.map((indicator) => (
           <article className="metric-card" key={indicator.code}>
-            <span>{indicator.name}</span>
+            <div style={{ alignItems: "flex-start", display: "flex", gap: 8, justifyContent: "space-between" }}>
+              <span>{indicator.name}</span>
+              <button
+                className={`rate-card__star ${favoriteCodes.has(indicator.code) ? "is-selected" : ""}`}
+                aria-label={
+                  favoriteCodes.has(indicator.code)
+                    ? `Quitar ${indicator.name} de favoritas`
+                    : `Agregar ${indicator.name} a favoritas`
+                }
+                aria-pressed={favoriteCodes.has(indicator.code)}
+                disabled={favoriteLoadingCode === indicator.code}
+                style={{
+                  alignItems: "center",
+                  background: "transparent",
+                  border: 0,
+                  cursor: favoriteLoadingCode === indicator.code ? "wait" : "pointer",
+                  display: "inline-flex",
+                  flex: "0 0 auto",
+                  height: 28,
+                  justifyContent: "center",
+                  margin: "-6px -6px 0 0",
+                  opacity: favoriteCodes.has(indicator.code) ? 1 : 0.68,
+                  padding: 0,
+                  width: 28
+                }}
+                type="button"
+                onClick={() => onToggleFavorite(indicator)}
+              >
+                <Star fill={favoriteCodes.has(indicator.code) ? "currentColor" : "none"} size={16} />
+              </button>
+            </div>
             <strong>
               {shortNumber(indicator.sell_price)}
               <small>%</small>
@@ -83,11 +120,45 @@ export function HomeScreen() {
   const { data: rates, isLoading, error } = useRates();
   const account = useAccount();
   const [authOpen, setAuthOpen] = useState(false);
+  const [favoriteLoadingCode, setFavoriteLoadingCode] = useState<string | null>(null);
+  const [favoriteStatus, setFavoriteStatus] = useState<string | null>(null);
   const isRegistered = Boolean(account.user);
   const mainRates = pickRates(rates, MAIN_RATE_CODES);
   const travelRates = pickRates(rates, TRAVEL_RATE_CODES);
   const previewRates = mainRates.filter((rate) => ["USD_BLUE", "USD_BLUE_MENDOZA"].includes(rate.code)).slice(0, 2);
   const hasRates = rates.length > 0;
+  const favoriteCodes = new Set(account.favorites.map((favorite) => favorite.rate_code));
+
+  async function toggleFavorite(rate: Rate) {
+    if (!account.user || !account.supabase) {
+      setAuthOpen(true);
+      return;
+    }
+
+    setFavoriteLoadingCode(rate.code);
+    setFavoriteStatus(null);
+    const wasFavorite = favoriteCodes.has(rate.code);
+
+    const result = wasFavorite
+      ? await account.supabase
+          .from("favorite_rates")
+          .delete()
+          .eq("user_id", account.user.id)
+          .eq("rate_code", rate.code)
+      : await account.supabase.from("favorite_rates").insert({
+          user_id: account.user.id,
+          rate_code: rate.code
+        });
+
+    if (!result.error) {
+      await account.reload();
+      setFavoriteStatus(wasFavorite ? `${rate.name} se quitó de tus favoritas.` : `${rate.name} se agregó a tus favoritas.`);
+    } else {
+      setFavoriteStatus("No pudimos actualizar tus favoritas. Intentá nuevamente.");
+    }
+
+    setFavoriteLoadingCode(null);
+  }
 
   return (
     <div className="screen screen--home screen--home-funnel">
@@ -212,12 +283,20 @@ export function HomeScreen() {
 
         {isLoading || !hasRates ? <p className="loading-line">Actualizando cotizaciones...</p> : null}
         {error && !hasRates ? <p className="notice">No pudimos cargar datos reales todavía. Reintentá en unos segundos.</p> : null}
+        {favoriteStatus ? <p className="notice">{favoriteStatus}</p> : null}
 
         {hasRates ? (
           <>
             <div className="card-list home-rates__grid">
               {(isRegistered ? mainRates : previewRates).map((rate) => (
-                <RateCard preview={!isRegistered} rate={rate} key={rate.code} />
+                <RateCard
+                  preview={!isRegistered}
+                  rate={rate}
+                  isFavorite={favoriteCodes.has(rate.code)}
+                  isFavoriteLoading={favoriteLoadingCode === rate.code}
+                  key={rate.code}
+                  onToggleFavorite={toggleFavorite}
+                />
               ))}
             </div>
 
@@ -229,14 +308,25 @@ export function HomeScreen() {
                 </div>
                 <div className="card-list home-rates__grid">
                   {travelRates.map((rate) => (
-                    <RateCard rate={rate} key={rate.code} />
+                    <RateCard
+                      rate={rate}
+                      isFavorite={favoriteCodes.has(rate.code)}
+                      isFavoriteLoading={favoriteLoadingCode === rate.code}
+                      key={rate.code}
+                      onToggleFavorite={toggleFavorite}
+                    />
                   ))}
                 </div>
                 <div className="home-rates__subhead">
                   <p className="eyebrow">Argentina hoy</p>
                   <h3>Tasa, plazo fijo y rendimiento</h3>
                 </div>
-                <ArgentinaToday rates={rates} />
+                <ArgentinaToday
+                  rates={rates}
+                  favoriteCodes={favoriteCodes}
+                  favoriteLoadingCode={favoriteLoadingCode}
+                  onToggleFavorite={toggleFavorite}
+                />
               </>
             ) : (
               <div className="rates-gate">
