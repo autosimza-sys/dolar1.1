@@ -44,10 +44,10 @@ export function PremiumScreen() {
       <section className="page-header premium-header">
         <div className="hero__badge hero__badge--premium">
           <Crown size={16} />
-          Alertas Premium
+          Planes de seguimiento
         </div>
-        <h1>Dejá de mirar el dólar todo el día.</h1>
-        <p>Nosotros te avisamos cuando pasa algo importante.</p>
+        <h1>Dejá de mirar el mercado todo el día.</h1>
+        <p>Elegí qué seguir y Dólar MZA te avisa cuando pasa algo importante.</p>
       </section>
 
       <section className="sales-lines">
@@ -56,34 +56,9 @@ export function PremiumScreen() {
         <p>La información justa cuando la necesitás.</p>
       </section>
 
-      <article className="plan-card plan-card--free">
-        <div className="plan-card__top">
-          <div>
-            <span className="plan-card__label">Gratis</span>
-            <h2>{freePlan.name}</h2>
-          </div>
-          <strong>{freePlan.priceLabel}</strong>
-        </div>
-        <p className="plan-card__copy">Entrá, aprendé, guardá favoritos e invitá amigos sin pagar.</p>
-        <ul>
-          {freePlan.includes.map((item) => (
-            <li key={item}>
-              <Check size={17} />
-              {item}
-            </li>
-          ))}
-        </ul>
-        <span className="plan-card__note">No incluye alertas, WhatsApp ni beneficios premium</span>
-      </article>
-
       <div className="plans">
         {plans.map((plan) => (
-          <article
-            className={`plan-card ${
-              plan.tone === "featured" ? "plan-card--featured" : plan.tone === "exclusive" ? "plan-card--premium plan-card--exclusive" : ""
-            }`}
-            key={plan.id}
-          >
+          <article className={`plan-card ${plan.tone === "featured" ? "plan-card--featured" : ""}`} key={plan.id}>
             <div className="plan-card__top">
               <div>
                 <span className="plan-card__label">{plan.tag}</span>
@@ -106,7 +81,7 @@ export function PremiumScreen() {
               <span className="plan-card__note">Sin prueba gratis</span>
             )}
             <button
-              className={`button button--full ${plan.tone === "exclusive" ? "button--premium" : ""}`}
+              className={`button button--full ${plan.tone === "featured" ? "button--alert" : "button--ghost"}`}
               disabled={isLoading}
               type="button"
               onClick={() => startPlan(plan.id)}
@@ -117,6 +92,26 @@ export function PremiumScreen() {
           </article>
         ))}
       </div>
+
+      <article className="plan-card plan-card--free">
+        <div className="plan-card__top">
+          <div>
+            <span className="plan-card__label">Siempre disponible</span>
+            <h2>{freePlan.name}</h2>
+          </div>
+          <strong>{freePlan.priceLabel}</strong>
+        </div>
+        <p className="plan-card__copy">Entrá, aprendé, guardá favoritos e invitá amigos sin pagar.</p>
+        <ul>
+          {freePlan.includes.map((item) => (
+            <li key={item}>
+              <Check size={17} />
+              {item}
+            </li>
+          ))}
+        </ul>
+        <span className="plan-card__note">No incluye alertas, WhatsApp ni beneficios premium</span>
+      </article>
 
       {message ? <p className="form-message">{message}</p> : null}
 
@@ -129,7 +124,7 @@ export function PremiumScreen() {
         <article>
           <MessageCircle size={20} />
           <strong>WhatsApp</strong>
-          <span>Disponible en el plan Premium WhatsApp.</span>
+          <span>Disponible en el plan Premium.</span>
         </article>
         <article>
           <Mail size={20} />
