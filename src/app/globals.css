@@ -1846,20 +1846,73 @@ textarea {
 }
 
 .account-actions--single {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .account-favorite-row {
   grid-template-columns: auto minmax(0, 1fr);
 }
 
-.account-favorite-row span {
-  color: var(--white-soft);
-  font-size: clamp(16px, 4.5vw, 20px);
+.account-details,
+.account-favorite-content {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.account-favorite-quotes {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-favorite-row .account-favorite-quotes span {
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  min-width: 0;
+  padding: 8px;
+}
+
+.account-favorite-quotes small,
+.account-favorite-meta,
+.account-education-card small {
+  color: var(--gray-text);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.account-favorite-quotes b {
+  color: var(--white);
+  font-size: clamp(15px, 4.2vw, 20px);
   font-variant-numeric: tabular-nums;
-  font-weight: 900;
-  overflow: visible;
-  white-space: nowrap;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.account-favorite-meta {
+  display: block;
+}
+
+.account-onboarding {
+  align-items: start;
+  display: grid;
+  gap: 5px;
+  text-align: left;
+}
+
+.account-onboarding strong {
+  color: var(--white);
+}
+
+.account-alert-upgrade strong {
+  color: var(--white);
+  display: block;
+  margin-bottom: 5px;
 }
 
 .account-education-card {
@@ -1875,6 +1928,57 @@ textarea {
 .account-referral-compact,
 .account-support-panel {
   gap: 11px;
+}
+
+.account-favorites-modal {
+  max-width: 520px;
+}
+
+.favorite-picker-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  max-height: min(52vh, 430px);
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-color: rgba(0, 200, 83, 0.46) rgba(255, 255, 255, 0.035);
+  scrollbar-width: thin;
+}
+
+.favorite-picker-option {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--gray-border);
+  border-radius: var(--radius);
+  color: var(--white);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) 26px;
+  min-height: 50px;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.favorite-picker-option.is-selected {
+  background: rgba(0, 200, 83, 0.12);
+  border-color: var(--green);
+}
+
+.favorite-picker-option > span:nth-child(2) {
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.favorite-picker-check {
+  align-items: center;
+  background: rgba(0, 200, 83, 0.14);
+  border: 1px solid rgba(0, 200, 83, 0.3);
+  border-radius: 4px;
+  color: var(--green);
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
 }
 
 .referral-panel {
@@ -2830,11 +2934,11 @@ textarea {
   order: 3;
 }
 
-.account-alerts-panel {
+.account-education-panel {
   order: 4;
 }
 
-.account-education-panel {
+.account-alerts-panel {
   order: 5;
 }
 
@@ -2889,12 +2993,12 @@ textarea {
   }
 
   .screen--account .account-favorites-panel,
-  .screen--account .account-alerts-panel {
+  .screen--account .account-education-panel {
     grid-column: 1;
   }
 
   .screen--account .account-market-panel,
-  .screen--account .account-education-panel {
+  .screen--account .account-alerts-panel {
     grid-column: 2;
   }
 }

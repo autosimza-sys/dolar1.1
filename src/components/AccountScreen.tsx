@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, BookOpen, Gift, LifeBuoy, LogOut, MessageCircle, Send, ShieldCheck, Star } from "lucide-react";
+import { Bell, BookOpen, Check, Gift, LifeBuoy, LogOut, MessageCircle, Send, Settings, ShieldCheck, Star, X } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_TYPES } from "@/lib/constants";
@@ -11,6 +11,17 @@ import { getAdminEmails, useAccount, useEducationCards, useRates } from "@/lib/h
 import type { Rate, ReferralSummary, UserAlert } from "@/lib/types";
 
 const supportReasons = ["Problema con mi cuenta", "Problema con contrasena", "Problema con alertas", "Problema con pago", "Otro"];
+const favoriteRateCodes = [
+  "USD_BLUE",
+  "USD_BLUE_MENDOZA",
+  "USD_BLUE_PROMEDIO_MENDOZA",
+  "USD_OFICIAL",
+  "USD_MEP",
+  "USD_CCL",
+  "EUR_OFICIAL",
+  "BRL_OFICIAL",
+  "CLP_OFICIAL"
+];
 
 function alertLabel(alert: UserAlert) {
   return ALERT_TYPES.find((type) => type.value === alert.condition_type)?.label ?? alert.condition_type;
@@ -61,8 +72,12 @@ export function AccountScreen() {
   const account = useAccount();
   const { data: rates } = useRates();
   const education = useEducationCards();
-  const [message, setMessage] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [selectedFavoriteCodes, setSelectedFavoriteCodes] = useState<string[]>([]);
+  const [favoritesStatus, setFavoritesStatus] = useState<string | null>(null);
+  const [isSavingFavorites, setIsSavingFavorites] = useState(false);
   const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -86,9 +101,15 @@ export function AccountScreen() {
     () =>
       account.favorites
         .map((favorite) => rateByCode.get(favorite.rate_code))
-        .filter((rate): rate is Rate => Boolean(rate))
-        .slice(0, 4),
+        .filter((rate): rate is Rate => Boolean(rate)),
     [account.favorites, rateByCode]
+  );
+  const favoriteOptions = useMemo(
+    () =>
+      favoriteRateCodes
+        .map((code) => rateByCode.get(code))
+        .filter((rate): rate is Rate => Boolean(rate)),
+    [rateByCode]
   );
   const recommendedArticle = education.data[0];
 
@@ -172,11 +193,64 @@ export function AccountScreen() {
     await account.reload();
   }
 
-  async function copyReferralLink() {
-    if (!referralSummary?.referral_link) return;
+  function openFavoritesSelector() {
+    setSelectedFavoriteCodes(account.favorites.map((favorite) => favorite.rate_code));
+    setFavoritesStatus(null);
+    setFavoritesOpen(true);
+  }
 
-    await navigator.clipboard.writeText(referralSummary.referral_link);
-    setMessage("Link de referido copiado.");
+  function toggleFavorite(code: string) {
+    setSelectedFavoriteCodes((current) =>
+      current.includes(code) ? current.filter((favoriteCode) => favoriteCode !== code) : [...current, code]
+    );
+  }
+
+  async function saveFavorites() {
+    if (!account.supabase || !account.user) {
+      setFavoritesStatus("No pudimos guardar tus favoritas. Volvé a iniciar sesión.");
+      return;
+    }
+
+    const currentCodes = account.favorites.map((favorite) => favorite.rate_code);
+    const codesToAdd = selectedFavoriteCodes.filter((code) => !currentCodes.includes(code));
+    const codesToRemove = currentCodes.filter((code) => !selectedFavoriteCodes.includes(code));
+
+    setIsSavingFavorites(true);
+    setFavoritesStatus(null);
+
+    if (codesToAdd.length) {
+      const { error } = await account.supabase.from("favorite_rates").insert(
+        codesToAdd.map((rateCode) => ({
+          user_id: account.user?.id,
+          rate_code: rateCode
+        }))
+      );
+
+      if (error) {
+        setIsSavingFavorites(false);
+        setFavoritesStatus("No pudimos guardar tus favoritas. Intentá nuevamente.");
+        return;
+      }
+    }
+
+    if (codesToRemove.length) {
+      const { error } = await account.supabase
+        .from("favorite_rates")
+        .delete()
+        .eq("user_id", account.user.id)
+        .in("rate_code", codesToRemove);
+
+      if (error) {
+        await account.reload();
+        setIsSavingFavorites(false);
+        setFavoritesStatus("No pudimos actualizar tus favoritas. Intentá nuevamente.");
+        return;
+      }
+    }
+
+    await account.reload();
+    setIsSavingFavorites(false);
+    setFavoritesOpen(false);
   }
 
   function whatsappReferralLink() {
@@ -256,31 +330,42 @@ export function AccountScreen() {
             <p className="eyebrow">Mi panel financiero</p>
             <h1>Hola {displayName}</h1>
             <p>Tu panel financiero personal.</p>
-            <span className="account-profile-email">{account.user.email}</span>
           </div>
-          <button className="icon-button" aria-label="Salir" type="button" onClick={signOut}>
-            <LogOut size={20} />
+          <button
+            className="icon-button"
+            aria-expanded={accountDetailsOpen}
+            aria-label="Mi cuenta"
+            type="button"
+            onClick={() => setAccountDetailsOpen((current) => !current)}
+          >
+            <Settings size={20} />
           </button>
         </div>
 
-        <div className="account-meta-grid">
-          <article>
-            <span>Plan actual</span>
-            <strong>{planLabel}</strong>
-          </article>
-          <article>
-            <span>Estado</span>
-            <strong>{accountStatusLabel(account.user.email_confirmed_at)}</strong>
-          </article>
-          <article>
-            <span>Proximo vencimiento</span>
-            <strong>{nextExpirationLabel(account.subscription?.expires_at)}</strong>
-          </article>
-        </div>
-
+        {accountDetailsOpen ? (
+          <div className="account-details">
+            <span className="account-profile-email">{account.user.email}</span>
+            <div className="account-meta-grid">
+              <article>
+                <span>Plan actual</span>
+                <strong>{planLabel}</strong>
+              </article>
+              <article>
+                <span>Estado</span>
+                <strong>{accountStatusLabel(account.user.email_confirmed_at)}</strong>
+              </article>
+              <article>
+                <span>Próximo vencimiento</span>
+                <strong>{nextExpirationLabel(account.subscription?.expires_at)}</strong>
+              </article>
+            </div>
+            <button className="button button--ghost button--full" type="button" onClick={signOut}>
+              <LogOut size={17} />
+              Cerrar sesión
+            </button>
+          </div>
+        ) : null}
       </section>
-
-      {message ? <p className="notice account-notice">{message}</p> : null}
 
       {isAdmin ? (
         <section className="admin-access-strip account-admin-strip">
@@ -333,7 +418,8 @@ export function AccountScreen() {
           </>
         ) : (
           <div className="account-alert-upgrade">
-            <p>Activá alertas para que Dólar MZA te avise cuando el mercado se mueva.</p>
+            <strong>¿Querés que Dólar MZA te avise cuando el mercado se mueva?</strong>
+            <p>Activá alertas y no tengas que mirar cotizaciones todo el día.</p>
             <Link className="button" href="/premium">
               Ver planes
             </Link>
@@ -355,23 +441,39 @@ export function AccountScreen() {
             favoriteRates.map((rate) => (
               <article className="account-favorite-row" key={rate.code}>
                 <FlagBadge compact rate={rate} />
-                <div>
+                <div className="account-favorite-content">
                   <strong>{rate.name}</strong>
-                  <span>
-                    {formatMoney(rate.buy_price, true)} / {formatMoney(rate.sell_price, true)}
-                  </span>
+                  <div className="account-favorite-quotes">
+                    <span>
+                      <small>Compra</small>
+                      <b>{formatMoney(rate.buy_price, true)}</b>
+                    </span>
+                    <span>
+                      <small>Venta</small>
+                      <b>{formatMoney(rate.sell_price, true)}</b>
+                    </span>
+                  </div>
+                  <small className="account-favorite-meta">
+                    {rate.buy_price !== null && rate.sell_price !== null
+                      ? `Spread ${formatMoney(Math.max(0, rate.sell_price - rate.buy_price), true)} · `
+                      : ""}
+                    {formatDateTime(rate.updated_at)}
+                  </small>
                 </div>
               </article>
             ))
           ) : (
-            <div className="empty-state">Elegí las cotizaciones que más te interesan para crear tu panel.</div>
+            <div className="empty-state account-onboarding">
+              <strong>Bienvenido a Dólar MZA.</strong>
+              <span>Elegí las cotizaciones que querés seguir y armá tu panel personal.</span>
+            </div>
           )}
         </div>
 
         <div className="account-actions account-actions--single">
-          <Link className="button" href="/#cotizaciones">
-            Agregar favoritas
-          </Link>
+          <button className="button" type="button" onClick={openFavoritesSelector}>
+            {favoriteRates.length ? "Editar favoritas" : "Elegir mis cotizaciones"}
+          </button>
         </div>
       </section>
 
@@ -392,17 +494,23 @@ export function AccountScreen() {
         <div className="account-panel__head">
           <div>
             <p className="eyebrow">Aprender</p>
-            <h2>Artículos recomendados</h2>
+            <h2>Recomendado para vos</h2>
           </div>
           <BookOpen size={22} />
         </div>
 
         <article className="account-education-card">
-          <strong>{recommendedArticle?.title ?? "Que es la brecha cambiaria"}</strong>
+          <strong>{recommendedArticle?.title ?? "Dólar o plazo fijo"}</strong>
+          <small>Lectura de 2 minutos</small>
           <span>{recommendedArticle?.content ?? "Una guia simple para entender la diferencia entre el dolar oficial y el blue."}</span>
-          <Link className="button button--ghost" href="/learn">
-            Seguir aprendiendo
-          </Link>
+          <div className="account-actions">
+            <Link className="button button--ghost" href="/learn">
+              Leer ahora
+            </Link>
+            <Link className="button button--ghost" href="/alerts">
+              Activar alerta
+            </Link>
+          </div>
         </article>
       </section>
 
@@ -436,9 +544,6 @@ export function AccountScreen() {
               </article>
             </div>
             <div className="account-actions account-actions--single">
-              <button className="button button--ghost" type="button" onClick={copyReferralLink}>
-                Copiar link
-              </button>
               <a className="button" href={whatsappReferralLink()} target="_blank" rel="noreferrer">
                 <MessageCircle size={17} />
                 Compartir
@@ -511,6 +616,50 @@ export function AccountScreen() {
           </form>
         ) : null}
       </section>
+
+      {favoritesOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="favorites-title">
+          <div className="modal account-favorites-modal">
+            <button className="icon-button modal__close" aria-label="Cerrar" type="button" onClick={() => setFavoritesOpen(false)}>
+              <X size={20} />
+            </button>
+            <h2 id="favorites-title">Elegí tus cotizaciones</h2>
+            <p>Seleccioná las monedas e indicadores que querés ver primero en tu panel.</p>
+
+            <div className="favorite-picker-list">
+              {favoriteOptions.length ? (
+                favoriteOptions.map((rate) => {
+                  const isSelected = selectedFavoriteCodes.includes(rate.code);
+
+                  return (
+                    <button
+                      className={`favorite-picker-option ${isSelected ? "is-selected" : ""}`}
+                      aria-pressed={isSelected}
+                      key={rate.code}
+                      type="button"
+                      onClick={() => toggleFavorite(rate.code)}
+                    >
+                      <FlagBadge compact rate={rate} />
+                      <span>{rate.name}</span>
+                      <span className="favorite-picker-check" aria-hidden="true">
+                        {isSelected ? <Check size={16} /> : null}
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="empty-state">Actualizando cotizaciones disponibles...</div>
+              )}
+            </div>
+
+            {favoritesStatus ? <p className="form-message">{favoritesStatus}</p> : null}
+
+            <button className="button button--full" disabled={isSavingFavorites} type="button" onClick={saveFavorites}>
+              {isSavingFavorites ? "Guardando..." : "Guardar favoritas"}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
