@@ -6,22 +6,11 @@ import { Bell, BookOpen, Check, Gift, LifeBuoy, LogOut, MessageCircle, Send, Set
 import { AuthForm } from "@/components/AuthForm";
 import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_TYPES } from "@/lib/constants";
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatDateTime, formatMoney, formatPercent, shortNumber } from "@/lib/format";
 import { getAdminEmails, useAccount, useEducationCards, useRates } from "@/lib/hooks";
 import type { Rate, ReferralSummary, UserAlert } from "@/lib/types";
 
 const supportReasons = ["Problema con mi cuenta", "Problema con contrasena", "Problema con alertas", "Problema con pago", "Otro"];
-const favoriteRateCodes = [
-  "USD_BLUE",
-  "USD_BLUE_MENDOZA",
-  "USD_BLUE_PROMEDIO_MENDOZA",
-  "USD_OFICIAL",
-  "USD_MEP",
-  "USD_CCL",
-  "EUR_OFICIAL",
-  "BRL_OFICIAL",
-  "CLP_OFICIAL"
-];
 
 function alertLabel(alert: UserAlert) {
   return ALERT_TYPES.find((type) => type.value === alert.condition_type)?.label ?? alert.condition_type;
@@ -106,10 +95,11 @@ export function AccountScreen() {
   );
   const favoriteOptions = useMemo(
     () =>
-      favoriteRateCodes
-        .map((code) => rateByCode.get(code))
-        .filter((rate): rate is Rate => Boolean(rate)),
-    [rateByCode]
+      [...rates].sort((a, b) => {
+        const typeOrder = { main: 0, travel: 1, indicator: 2 };
+        return typeOrder[a.type] - typeOrder[b.type] || a.name.localeCompare(b.name, "es");
+      }),
+    [rates]
   );
   const recommendedArticle = education.data[0];
 
@@ -443,18 +433,31 @@ export function AccountScreen() {
                 <FlagBadge compact rate={rate} />
                 <div className="account-favorite-content">
                   <strong>{rate.name}</strong>
-                  <div className="account-favorite-quotes">
-                    <span>
-                      <small>Compra</small>
-                      <b>{formatMoney(rate.buy_price, true)}</b>
-                    </span>
-                    <span>
-                      <small>Venta</small>
-                      <b>{formatMoney(rate.sell_price, true)}</b>
-                    </span>
-                  </div>
+                  {rate.type === "indicator" ? (
+                    <div className="account-favorite-quotes">
+                      <span>
+                        <small>Valor</small>
+                        <b>{shortNumber(rate.sell_price)}%</b>
+                      </span>
+                      <span>
+                        <small>Variación</small>
+                        <b>{formatPercent(rate.variation)}</b>
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="account-favorite-quotes">
+                      <span>
+                        <small>Compra</small>
+                        <b>{formatMoney(rate.buy_price, true)}</b>
+                      </span>
+                      <span>
+                        <small>Venta</small>
+                        <b>{formatMoney(rate.sell_price, true)}</b>
+                      </span>
+                    </div>
+                  )}
                   <small className="account-favorite-meta">
-                    {rate.buy_price !== null && rate.sell_price !== null
+                    {rate.type !== "indicator" && rate.buy_price !== null && rate.sell_price !== null
                       ? `Spread ${formatMoney(Math.max(0, rate.sell_price - rate.buy_price), true)} · `
                       : ""}
                     {formatDateTime(rate.updated_at)}
