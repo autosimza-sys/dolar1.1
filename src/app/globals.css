@@ -2826,19 +2826,19 @@ textarea {
   order: 2;
 }
 
-.account-alerts-panel {
+.account-market-panel {
   order: 3;
 }
 
-.account-education-panel {
+.account-alerts-panel {
   order: 4;
 }
 
-.account-referral-compact {
+.account-education-panel {
   order: 5;
 }
 
-.account-upgrade-panel {
+.account-referral-compact {
   order: 6;
 }
 
@@ -2883,18 +2883,18 @@ textarea {
   .screen--account .account-profile-card,
   .screen--account .account-admin-strip,
   .screen--account .account-notice,
-  .screen--account .account-upgrade-panel,
+  .screen--account .account-referral-compact,
   .screen--account .account-support-panel {
     grid-column: 1 / -1;
   }
 
   .screen--account .account-favorites-panel,
-  .screen--account .account-education-panel {
+  .screen--account .account-alerts-panel {
     grid-column: 1;
   }
 
-  .screen--account .account-alerts-panel,
-  .screen--account .account-referral-compact {
+  .screen--account .account-market-panel,
+  .screen--account .account-education-panel {
     grid-column: 2;
   }
 }

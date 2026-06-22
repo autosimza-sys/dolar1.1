@@ -2,10 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, BookOpen, Crown, Gift, LifeBuoy, LogOut, MessageCircle, Send, ShieldCheck, Star } from "lucide-react";
+import { Bell, BookOpen, Gift, LifeBuoy, LogOut, MessageCircle, Send, ShieldCheck, Star } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { FlagBadge } from "@/components/FlagBadge";
-import { commercialPlans } from "@/lib/commercial";
 import { ALERT_TYPES } from "@/lib/constants";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { getAdminEmails, useAccount, useEducationCards, useRates } from "@/lib/hooks";
@@ -78,10 +77,11 @@ export function AccountScreen() {
   const planLabel = subscriptionLabel(account.subscription?.plan, account.subscription?.status, account.isPremium);
   const hasAlertPlan = Boolean(account.isPremium || account.subscription?.status === "active");
   const adminEmails = useMemo(() => getAdminEmails(), []);
+  const displayName = account.profile?.full_name?.trim() || account.user?.email?.split("@")[0] || "Usuario";
 
   const rateByCode = useMemo(() => new Map(rates.map((rate) => [rate.code, rate])), [rates]);
   const activeAlerts = useMemo(() => account.alerts.filter((alert) => alert.is_active), [account.alerts]);
-  const latestAlerts = useMemo(() => account.alerts.slice(0, 3), [account.alerts]);
+  const latestAlerts = useMemo(() => activeAlerts.slice(0, 3), [activeAlerts]);
   const favoriteRates = useMemo(
     () =>
       account.favorites
@@ -254,7 +254,8 @@ export function AccountScreen() {
         <div className="account-panel__head">
           <div>
             <p className="eyebrow">Mi panel financiero</p>
-            <h1>{account.profile?.full_name || "Mi cuenta"}</h1>
+            <h1>Hola {displayName}</h1>
+            <p>Tu panel financiero personal.</p>
             <span className="account-profile-email">{account.user.email}</span>
           </div>
           <button className="icon-button" aria-label="Salir" type="button" onClick={signOut}>
@@ -363,18 +364,28 @@ export function AccountScreen() {
               </article>
             ))
           ) : (
-            <div className="empty-state">Todavia no elegiste monedas favoritas.</div>
+            <div className="empty-state">Elegí las cotizaciones que más te interesan para crear tu panel.</div>
           )}
         </div>
 
-        <div className="account-actions">
+        <div className="account-actions account-actions--single">
           <Link className="button" href="/#cotizaciones">
             Agregar favoritas
           </Link>
-          <Link className="button button--ghost" href="/#cotizaciones">
-            Ver cotizaciones
-          </Link>
         </div>
+      </section>
+
+      <section className="account-panel account-market-panel">
+        <div className="account-panel__head">
+          <div>
+            <p className="eyebrow">Mercado</p>
+            <h2>Todas las cotizaciones</h2>
+          </div>
+        </div>
+        <p className="account-upgrade-copy">Consultá el mercado completo después de revisar tus favoritas.</p>
+        <Link className="button button--ghost button--full" href="/#cotizaciones">
+          Ver todas las cotizaciones
+        </Link>
       </section>
 
       <section className="account-panel account-education-panel">
@@ -410,7 +421,7 @@ export function AccountScreen() {
               <span>Tu link personal</span>
               <strong>{referralSummary.referral_link}</strong>
             </div>
-            <div className="account-meta-grid account-meta-grid--two">
+            <div className="account-meta-grid">
               <article>
                 <span>Descuento acumulado</span>
                 <strong>{formatMoney(referralSummary.credit_available, true)}</strong>
@@ -418,6 +429,10 @@ export function AccountScreen() {
               <article>
                 <span>Puntos acumulados</span>
                 <strong>{referralSummary.points_active}</strong>
+              </article>
+              <article>
+                <span>Referidos</span>
+                <strong>{referralSummary.referrals_valid}</strong>
               </article>
             </div>
             <div className="account-actions account-actions--single">
@@ -433,29 +448,6 @@ export function AccountScreen() {
         ) : (
           <div className="empty-state">{referralError ?? "Preparando tu link de referido..."}</div>
         )}
-      </section>
-
-      <section className="account-panel account-upgrade-panel">
-        <div className="account-panel__head">
-          <div>
-            <p className="eyebrow">Desbloqueá seguimiento</p>
-            <h2>Alertas y planes</h2>
-          </div>
-          <Crown size={22} />
-        </div>
-        <p className="account-upgrade-copy">Elegí un plan cuando quieras que Dólar MZA siga el mercado por vos.</p>
-        <div className="account-plan-grid">
-          {Object.values(commercialPlans).map((plan) => (
-            <article className={plan.tone === "featured" ? "is-featured" : ""} key={plan.id}>
-              <span>{plan.tag}</span>
-              <strong>{plan.name}</strong>
-              <b>{plan.priceLabel}</b>
-            </article>
-          ))}
-        </div>
-        <Link className="button button--ghost button--full" href="/premium">
-          Ver detalle de planes
-        </Link>
       </section>
 
       <section className="account-panel support-panel account-support-panel">
