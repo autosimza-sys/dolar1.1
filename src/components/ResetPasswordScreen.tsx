@@ -2,12 +2,14 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Eye, EyeOff, Lock, Mail, RotateCw } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, LoaderCircle, Lock, Mail, RotateCw } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const recoverySessionKey = "dolar_mza_password_recovery";
 const recoveryPendingKey = "dolar_mza_password_recovery_pending";
 const recoveryWindowMs = 2 * 60 * 60 * 1000;
+
+type ResetView = "checking" | "form" | "new-link" | "done";
 
 function getFriendlyResetError(message: string) {
   const normalized = message.toLowerCase();
@@ -32,7 +34,7 @@ function getResetRedirectUrl() {
 }
 
 function expiredLinkMessage() {
-  return "El enlace de recuperacion vencio o ya fue usado. Volve a solicitar un nuevo correo para cambiar tu contrasena.";
+  return "El enlace de recuperación venció o ya fue usado. Volvé a solicitar un nuevo correo para cambiar tu contraseña.";
 }
 
 function hasResetLinkError(params: URLSearchParams) {
@@ -53,12 +55,6 @@ function hasRecentRecoveryPending() {
   }
 }
 
-function hasRecoveryHash() {
-  if (typeof window === "undefined") return false;
-  const hash = window.location.hash.toLowerCase();
-  return hash.includes("type=recovery") || hash.includes("access_token") || hash.includes("refresh_token");
-}
-
 function clearRecoveryMarkers() {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(recoverySessionKey);
@@ -72,106 +68,138 @@ export function ResetPasswordScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [isReady, setIsReady] = useState(false);
-  const [canReset, setCanReset] = useState(false);
-  const [needsNewLink, setNeedsNewLink] = useState(false);
+  const [view, setView] = useState<ResetView>("checking");
   const [recoveryEmail, setRecoveryEmail] = useState("");
   const [isRequestingLink, setIsRequestingLink] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isDone, setIsDone] = useState(false);
 
   useEffect(() => {
-    async function waitForSession() {
-      if (!supabase) return false;
-
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        const { data } = await supabase.auth.getSession();
-        if (data.session) return true;
-        await new Promise((resolve) => setTimeout(resolve, 250));
-      }
-
-      return false;
+    if (!supabase) {
+      setMessage("La conexión con Supabase no está configurada.");
+      setView("new-link");
+      return;
     }
 
-    async function prepareSession() {
-      if (!supabase) {
-        setMessage("La conexión con Supabase no está configurada.");
-        setIsReady(true);
-        return;
-      }
+    const client = supabase;
+    let cancelled = false;
+    let recoveryActivated = false;
 
-      const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-      const code = params.get("code");
-      const type = params.get("type");
-
-      if (hasResetLinkError(params)) {
-        setMessage(expiredLinkMessage());
-        setCanReset(false);
-        setNeedsNewLink(true);
-        setIsReady(true);
-        return;
-      }
-
-      const hasSessionMarker = typeof window !== "undefined" && window.sessionStorage.getItem(recoverySessionKey) === "1";
-      const hasRecoveryMarker = type === "recovery" || Boolean(code) || hasRecoveryHash() || hasSessionMarker || hasRecentRecoveryPending();
-
-      if (!hasRecoveryMarker) {
-        setMessage("Abrí esta pantalla desde el correo de recuperación para cambiar tu contraseña.");
-        setCanReset(false);
-        setNeedsNewLink(true);
-        setIsReady(true);
-        return;
-      }
-
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem(recoverySessionKey, "1");
-      }
-
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          setMessage(expiredLinkMessage());
-          setCanReset(false);
-          setNeedsNewLink(true);
-          setIsReady(true);
-          return;
-        }
-      }
-
-      const sessionReady = await waitForSession();
-
-      if (!sessionReady) {
-        setMessage("El enlace venció o no es válido. Volvé a solicitar la recuperación.");
-        setCanReset(false);
-        setNeedsNewLink(true);
-        setIsReady(true);
-        return;
-      }
-
-      setCanReset(true);
-      setNeedsNewLink(false);
+    function showResetForm() {
+      if (cancelled) return;
+      recoveryActivated = true;
+      window.sessionStorage.setItem(recoverySessionKey, "1");
       setMessage(null);
-      setIsReady(true);
+      setView("form");
 
-      if (typeof window !== "undefined" && (window.location.search || window.location.hash)) {
+      if (window.location.search || window.location.hash) {
         window.history.replaceState({}, "", "/reset-password");
       }
     }
 
+    function showNewLink(nextMessage: string) {
+      if (cancelled || recoveryActivated) return;
+      setMessage(nextMessage);
+      setView("new-link");
+    }
+
+    const { data } = client.auth.onAuthStateChange((event, session) => {
+      if ((event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") && session) {
+        showResetForm();
+      }
+    });
+
+    async function prepareSession() {
+      const params = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const code = params.get("code");
+      const type = params.get("type") ?? hashParams.get("type");
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+      const hasCallbackData = type === "recovery" || Boolean(code) || Boolean(accessToken && refreshToken);
+      const hasSessionMarker = window.sessionStorage.getItem(recoverySessionKey) === "1";
+      const hasRecoveryMarker = hasCallbackData || hasSessionMarker || hasRecentRecoveryPending();
+
+      if (hasResetLinkError(params) || hasResetLinkError(hashParams)) {
+        showNewLink(expiredLinkMessage());
+        return;
+      }
+
+      if (hasRecoveryMarker) {
+        window.sessionStorage.setItem(recoverySessionKey, "1");
+      }
+
+      // Supabase puede haber creado la sesión antes de que esta pantalla cargue.
+      const initialSession = await client.auth.getSession();
+      if (initialSession.data.session) {
+        showResetForm();
+        return;
+      }
+
+      if (code) {
+        const exchanged = await client.auth.exchangeCodeForSession(code);
+        if (!exchanged.error && exchanged.data.session) {
+          showResetForm();
+          return;
+        }
+
+        // Evita rechazar un código que otro cliente de Supabase canjeó en paralelo.
+        const sessionAfterExchange = await client.auth.getSession();
+        if (sessionAfterExchange.data.session) {
+          showResetForm();
+          return;
+        }
+      }
+
+      if (accessToken && refreshToken) {
+        const sessionFromHash = await client.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+
+        if (!sessionFromHash.error && sessionFromHash.data.session) {
+          showResetForm();
+          return;
+        }
+      }
+
+      // Da tiempo al evento PASSWORD_RECOVERY para completar la sesión.
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        if (cancelled || recoveryActivated) return;
+
+        const sessionResult = await client.auth.getSession();
+        if (sessionResult.data.session) {
+          showResetForm();
+          return;
+        }
+      }
+
+      showNewLink(
+        hasRecoveryMarker
+          ? expiredLinkMessage()
+          : "Abrí esta pantalla desde el correo de recuperación para cambiar tu contraseña."
+      );
+    }
+
     void prepareSession();
+
+    return () => {
+      cancelled = true;
+      data.subscription.unsubscribe();
+    };
   }, [supabase]);
 
   async function requestNewRecoveryLink() {
     setMessage(null);
 
     if (!supabase) {
-      setMessage("La conexion con Supabase no esta configurada.");
+      setMessage("La conexión con Supabase no está configurada.");
       return;
     }
 
     const cleanEmail = recoveryEmail.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setMessage("Ingresa el email de tu cuenta.");
+      setMessage("Ingresá el email de tu cuenta.");
       return;
     }
 
@@ -186,18 +214,16 @@ export function ResetPasswordScreen() {
       return;
     }
 
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(recoverySessionKey, "1");
-      window.localStorage.setItem(
-        recoveryPendingKey,
-        JSON.stringify({
-          email: cleanEmail,
-          createdAt: Date.now()
-        })
-      );
-    }
+    window.sessionStorage.setItem(recoverySessionKey, "1");
+    window.localStorage.setItem(
+      recoveryPendingKey,
+      JSON.stringify({
+        email: cleanEmail,
+        createdAt: Date.now()
+      })
+    );
 
-    setMessage("Te enviamos un nuevo correo para restablecer tu contrasena. Revisa tu bandeja de entrada o spam.");
+    setMessage("Te enviamos un nuevo correo para restablecer tu contraseña. Revisá tu bandeja de entrada o spam.");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -209,7 +235,7 @@ export function ResetPasswordScreen() {
       return;
     }
 
-    if (!canReset) {
+    if (view !== "form") {
       setMessage("El enlace venció o no es válido. Volvé a solicitar la recuperación.");
       return;
     }
@@ -236,7 +262,7 @@ export function ResetPasswordScreen() {
     await supabase.auth.signOut();
     clearRecoveryMarkers();
     setIsSaving(false);
-    setIsDone(true);
+    setView("done");
     setMessage("Tu contraseña fue actualizada correctamente.");
   }
 
@@ -245,11 +271,17 @@ export function ResetPasswordScreen() {
       <section className="page-header">
         <p className="eyebrow">Cuenta</p>
         <h1>Crear nueva contraseña</h1>
-        <p>Elegí una nueva contraseña para volver a ingresar a tu cuenta.</p>
+        <p>Elegí una contraseña segura para volver a ingresar a Dólar MZA.</p>
       </section>
 
       <form className="panel auth-form" onSubmit={handleSubmit}>
-        {isDone ? (
+        {view === "checking" ? (
+          <div className="auth-state">
+            <LoaderCircle size={34} />
+            <h2>Verificando el enlace...</h2>
+            <p>Esperá un momento mientras preparamos el cambio de contraseña.</p>
+          </div>
+        ) : view === "done" ? (
           <div className="auth-state">
             <CheckCircle2 size={34} />
             <h2>Tu contraseña fue actualizada correctamente.</h2>
@@ -258,7 +290,7 @@ export function ResetPasswordScreen() {
               Iniciar sesión
             </Link>
           </div>
-        ) : needsNewLink ? (
+        ) : view === "new-link" ? (
           <div className="auth-state">
             <RotateCw size={34} />
             <h2>Solicitar nuevo enlace</h2>
@@ -291,7 +323,6 @@ export function ResetPasswordScreen() {
                 <Lock size={18} />
                 <input
                   autoComplete="new-password"
-                  disabled={!isReady || !canReset}
                   minLength={6}
                   required
                   type={showPassword ? "text" : "password"}
@@ -301,7 +332,6 @@ export function ResetPasswordScreen() {
                 <button
                   aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                   className="password-toggle"
-                  disabled={!isReady || !canReset}
                   type="button"
                   onClick={() => setShowPassword((current) => !current)}
                 >
@@ -316,7 +346,6 @@ export function ResetPasswordScreen() {
                 <Lock size={18} />
                 <input
                   autoComplete="new-password"
-                  disabled={!isReady || !canReset}
                   minLength={6}
                   required
                   type={showConfirmPassword ? "text" : "password"}
@@ -326,7 +355,6 @@ export function ResetPasswordScreen() {
                 <button
                   aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                   className="password-toggle"
-                  disabled={!isReady || !canReset}
                   type="button"
                   onClick={() => setShowConfirmPassword((current) => !current)}
                 >
@@ -337,7 +365,7 @@ export function ResetPasswordScreen() {
 
             {message ? <p className="form-message">{message}</p> : null}
 
-            <button className="button button--full" disabled={!isReady || !canReset || isSaving} type="submit">
+            <button className="button button--full" disabled={isSaving} type="submit">
               {isSaving ? "Guardando..." : "Guardar nueva contraseña"}
             </button>
 
