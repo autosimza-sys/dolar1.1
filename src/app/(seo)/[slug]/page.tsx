@@ -3,8 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { Bell, ChevronRight, Clock3 } from "lucide-react";
+import { FlagBadge } from "@/components/FlagBadge";
 import { demoRates } from "@/lib/demo-data";
 import { formatDateTime, formatMoney, formatPercent } from "@/lib/format";
+import { getRateDisplayName } from "@/lib/rate-presentation";
 import { findSeoPage, seoPages, siteUrl } from "@/lib/seo-content";
 import type { Rate } from "@/lib/types";
 
@@ -109,9 +111,9 @@ export default async function SeoLandingPage({ params }: PageProps) {
         <section className="rate-card seo-rate-card">
           <div className="rate-card__top">
             <div className="rate-card__identity">
-              <span className="rate-card__flag">{rate.flag}</span>
+              <FlagBadge rate={rate} />
               <div>
-                <h2>{rate.name}</h2>
+                <h2>{getRateDisplayName(rate)}</h2>
                 <p>{rate.country}</p>
               </div>
             </div>

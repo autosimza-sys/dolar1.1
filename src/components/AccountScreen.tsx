@@ -2,15 +2,72 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, BookOpen, Check, Gift, LifeBuoy, LogOut, MessageCircle, Send, Settings, ShieldCheck, Star, X } from "lucide-react";
+import {
+  Activity,
+  Bell,
+  BookOpen,
+  Briefcase,
+  Check,
+  DollarSign,
+  Gift,
+  LifeBuoy,
+  LogOut,
+  MessageCircle,
+  Plane,
+  Send,
+  Settings,
+  ShieldCheck,
+  Star,
+  TrendingUp,
+  X
+} from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_TYPES } from "@/lib/constants";
 import { formatDateTime, formatMoney, formatPercent, shortNumber } from "@/lib/format";
 import { getAdminEmails, useAccount, useEducationCards, useRates } from "@/lib/hooks";
+import { getRateDisplayName } from "@/lib/rate-presentation";
 import type { Rate, ReferralSummary, UserAlert } from "@/lib/types";
 
 const supportReasons = ["Problema con mi cuenta", "Problema con contrasena", "Problema con alertas", "Problema con pago", "Otro"];
+
+const favoriteProfiles = [
+  {
+    id: "save",
+    label: "Ahorrar dólares",
+    description: "Referencias útiles para ahorro y compra de dólares.",
+    codes: ["USD_BLUE_PROMEDIO_MENDOZA", "USD_BLUE_MENDOZA", "USD_MEP"],
+    icon: DollarSign
+  },
+  {
+    id: "travel",
+    label: "Viajar",
+    description: "Monedas para planificar viajes y gastos afuera.",
+    codes: ["USD_BLUE", "EUR_BLUE", "BRL_BLUE", "CLP_BLUE"],
+    icon: Plane
+  },
+  {
+    id: "invest",
+    label: "Invertir",
+    description: "Mercados financieros e indicadores para comparar.",
+    codes: ["USD_MEP", "USD_CCL", "COUNTRY_RISK", "USD_BLUE_PROMEDIO_MENDOZA"],
+    icon: TrendingUp
+  },
+  {
+    id: "trade",
+    label: "Comercio exterior",
+    description: "Referencias oficiales y financieras para operar.",
+    codes: ["USD_OFICIAL", "USD_CCL", "USD_MEP", "EUR_OFICIAL"],
+    icon: Briefcase
+  },
+  {
+    id: "market",
+    label: "Solo seguir el mercado",
+    description: "Una vista equilibrada del mercado nacional y mendocino.",
+    codes: ["USD_BLUE", "USD_BLUE_MENDOZA", "USD_BLUE_PROMEDIO_MENDOZA", "USD_OFICIAL"],
+    icon: Activity
+  }
+] as const;
 
 function alertLabel(alert: UserAlert) {
   return ALERT_TYPES.find((type) => type.value === alert.condition_type)?.label ?? alert.condition_type;
@@ -25,7 +82,7 @@ function alertTargetLabel(alert: UserAlert) {
 }
 
 function accountAlertTitle(alert: UserAlert, rate?: Rate) {
-  const name = rate?.name ?? alert.rate_code;
+  const name = rate ? getRateDisplayName(rate) : alert.rate_code;
   const target = alertTargetLabel(alert);
 
   if (alert.condition_type === "above") return `${name} > ${target}`;
@@ -64,6 +121,8 @@ export function AccountScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [favoriteStep, setFavoriteStep] = useState<"interest" | "rates">("interest");
+  const [selectedFavoriteProfile, setSelectedFavoriteProfile] = useState<string | null>(null);
   const [selectedFavoriteCodes, setSelectedFavoriteCodes] = useState<string[]>([]);
   const [favoritesStatus, setFavoritesStatus] = useState<string | null>(null);
   const [isSavingFavorites, setIsSavingFavorites] = useState(false);
@@ -97,7 +156,16 @@ export function AccountScreen() {
     () =>
       [...rates].sort((a, b) => {
         const typeOrder = { main: 0, travel: 1, indicator: 2 };
-        return typeOrder[a.type] - typeOrder[b.type] || a.name.localeCompare(b.name, "es");
+        const featuredOrder: Record<string, number> = {
+          USD_BLUE_PROMEDIO_MENDOZA: 0,
+          USD_BLUE_MENDOZA: 1,
+          USD_BLUE: 2
+        };
+        return (
+          typeOrder[a.type] - typeOrder[b.type] ||
+          (featuredOrder[a.code] ?? 99) - (featuredOrder[b.code] ?? 99) ||
+          getRateDisplayName(a).localeCompare(getRateDisplayName(b), "es")
+        );
       }),
     [rates]
   );
@@ -185,8 +253,17 @@ export function AccountScreen() {
 
   function openFavoritesSelector() {
     setSelectedFavoriteCodes(account.favorites.map((favorite) => favorite.rate_code));
+    setSelectedFavoriteProfile(null);
+    setFavoriteStep(account.favorites.length ? "rates" : "interest");
     setFavoritesStatus(null);
     setFavoritesOpen(true);
+  }
+
+  function chooseFavoriteProfile(profile: (typeof favoriteProfiles)[number]) {
+    const availableCodes = new Set(rates.map((rate) => rate.code));
+    setSelectedFavoriteProfile(profile.id);
+    setSelectedFavoriteCodes(profile.codes.filter((code) => availableCodes.has(code)));
+    setFavoriteStep("rates");
   }
 
   function toggleFavorite(code: string) {
@@ -432,7 +509,7 @@ export function AccountScreen() {
               <article className="account-favorite-row" key={rate.code}>
                 <FlagBadge compact rate={rate} />
                 <div className="account-favorite-content">
-                  <strong>{rate.name}</strong>
+                  <strong>{getRateDisplayName(rate)}</strong>
                   {rate.type === "indicator" ? (
                     <div className="account-favorite-quotes">
                       <span>
@@ -626,40 +703,82 @@ export function AccountScreen() {
             <button className="icon-button modal__close" aria-label="Cerrar" type="button" onClick={() => setFavoritesOpen(false)}>
               <X size={20} />
             </button>
-            <h2 id="favorites-title">Elegí tus cotizaciones</h2>
-            <p>Seleccioná las monedas e indicadores que querés ver primero en tu panel.</p>
+            {favoriteStep === "interest" ? (
+              <>
+                <h2 id="favorites-title">¿Qué te interesa?</h2>
+                <p>Elegí una opción y preparamos una selección inicial. Después podés cambiarla como quieras.</p>
+                <div className="favorite-profile-list">
+                  {favoriteProfiles.map((profile) => {
+                    const Icon = profile.icon;
 
-            <div className="favorite-picker-list">
-              {favoriteOptions.length ? (
-                favoriteOptions.map((rate) => {
-                  const isSelected = selectedFavoriteCodes.includes(rate.code);
-
-                  return (
-                    <button
-                      className={`favorite-picker-option ${isSelected ? "is-selected" : ""}`}
-                      aria-pressed={isSelected}
-                      key={rate.code}
-                      type="button"
-                      onClick={() => toggleFavorite(rate.code)}
-                    >
-                      <FlagBadge compact rate={rate} />
-                      <span>{rate.name}</span>
-                      <span className="favorite-picker-check" aria-hidden="true">
-                        {isSelected ? <Check size={16} /> : null}
-                      </span>
+                    return (
+                      <button
+                        className="favorite-profile-option"
+                        key={profile.id}
+                        type="button"
+                        onClick={() => chooseFavoriteProfile(profile)}
+                      >
+                        <Icon size={20} />
+                        <span>
+                          <strong>{profile.label}</strong>
+                          <small>{profile.description}</small>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="favorite-picker-heading">
+                  <div>
+                    <h2 id="favorites-title">Elegí tus cotizaciones</h2>
+                    <p>
+                      {selectedFavoriteProfile
+                        ? "Ya marcamos una selección recomendada. Podés sumar o quitar opciones."
+                        : "Seleccioná las monedas e indicadores que querés ver primero en tu panel."}
+                    </p>
+                  </div>
+                  {!account.favorites.length ? (
+                    <button className="text-link" type="button" onClick={() => setFavoriteStep("interest")}>
+                      Cambiar interés
                     </button>
-                  );
-                })
-              ) : (
-                <div className="empty-state">Actualizando cotizaciones disponibles...</div>
-              )}
-            </div>
+                  ) : null}
+                </div>
 
-            {favoritesStatus ? <p className="form-message">{favoritesStatus}</p> : null}
+                <div className="favorite-picker-list">
+                  {favoriteOptions.length ? (
+                    favoriteOptions.map((rate) => {
+                      const isSelected = selectedFavoriteCodes.includes(rate.code);
 
-            <button className="button button--full" disabled={isSavingFavorites} type="button" onClick={saveFavorites}>
-              {isSavingFavorites ? "Guardando..." : "Guardar favoritas"}
-            </button>
+                      return (
+                        <button
+                          className={`favorite-picker-option ${isSelected ? "is-selected" : ""}`}
+                          aria-pressed={isSelected}
+                          key={rate.code}
+                          type="button"
+                          onClick={() => toggleFavorite(rate.code)}
+                        >
+                          <FlagBadge compact rate={rate} />
+                          <span>{getRateDisplayName(rate)}</span>
+                          <span className="favorite-picker-check" aria-hidden="true">
+                            {isSelected ? <Check size={16} /> : null}
+                          </span>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="empty-state">Actualizando cotizaciones disponibles...</div>
+                  )}
+                </div>
+
+                {favoritesStatus ? <p className="form-message">{favoritesStatus}</p> : null}
+
+                <button className="button button--full" disabled={isSavingFavorites} type="button" onClick={saveFavorites}>
+                  {isSavingFavorites ? "Guardando..." : "Guardar favoritas"}
+                </button>
+              </>
+            )}
           </div>
         </div>
       ) : null}

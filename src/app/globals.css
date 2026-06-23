@@ -319,13 +319,37 @@ button:disabled {
   position: relative;
 }
 
+.rate-card--mza-index {
+  border-color: rgba(0, 200, 83, 0.48);
+  box-shadow: inset 3px 0 0 rgba(0, 200, 83, 0.72);
+}
+
+.rate-card__index-label {
+  color: var(--green);
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+
 .rate-card__flag {
   align-items: center;
   display: inline-flex;
-  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
-  font-size: 18px;
-  line-height: 1;
+  flex: 0 0 auto;
+  gap: 3px;
   white-space: nowrap;
+}
+
+.rate-card__flag img {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.34);
+  display: block;
+  height: 16px;
+  object-fit: cover;
+  width: 24px;
 }
 
 .rate-card__star {
@@ -379,7 +403,49 @@ button:disabled {
 }
 
 .rate-card__flag--compact {
-  font-size: 15px;
+  gap: 2px;
+}
+
+.rate-card__flag--compact img {
+  height: 13px;
+  width: 20px;
+}
+
+.rate-card__confidence {
+  align-items: center;
+  display: grid;
+  gap: 2px 7px;
+  grid-template-columns: 8px minmax(0, 1fr);
+  margin-top: 10px;
+}
+
+.rate-card__confidence > span {
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(0, 200, 83, 0.12);
+  height: 7px;
+  width: 7px;
+}
+
+.rate-card__confidence strong {
+  font-size: 12px;
+}
+
+.rate-card__confidence small {
+  color: var(--gray-text);
+  font-size: 10px;
+  grid-column: 2;
+  line-height: 1.35;
+}
+
+.rate-card__confidence--medium > span {
+  background: var(--yellow);
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.12);
+}
+
+.rate-card__confidence--low > span {
+  background: var(--gray-text);
+  box-shadow: 0 0 0 3px rgba(163, 163, 163, 0.12);
 }
 
 .rate-card h3,
@@ -1932,6 +1998,69 @@ textarea {
 
 .account-favorites-modal {
   max-width: 520px;
+}
+
+.favorite-profile-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.favorite-profile-option {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--gray-border);
+  border-radius: var(--radius);
+  color: var(--white);
+  display: grid;
+  gap: 11px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  min-height: 62px;
+  padding: 10px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.favorite-profile-option:hover,
+.favorite-profile-option:focus-visible {
+  background: rgba(0, 200, 83, 0.1);
+  border-color: rgba(0, 200, 83, 0.7);
+}
+
+.favorite-profile-option > svg {
+  color: var(--green);
+}
+
+.favorite-profile-option > span {
+  display: grid;
+  gap: 3px;
+}
+
+.favorite-profile-option strong {
+  font-size: 14px;
+}
+
+.favorite-profile-option small {
+  color: var(--gray-text);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.favorite-picker-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.favorite-picker-heading > div {
+  min-width: 0;
+}
+
+.favorite-picker-heading .text-link {
+  flex: 0 0 auto;
+  font-size: 11px;
+  margin-top: 4px;
 }
 
 .favorite-picker-list {

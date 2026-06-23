@@ -73,6 +73,13 @@ type RateUpdate = {
   source: string;
   is_visible: boolean;
   updated_at: string;
+  calculation?: {
+    center: number | null;
+    confidence: "low" | "medium" | "high";
+    method: "local_average" | "national_fallback";
+    report_count: number;
+    source_count: number;
+  };
 };
 
 const DOLAR_API = "https://dolarapi.com/v1";
@@ -80,6 +87,8 @@ const ARGENTINA_DATOS_API = "https://api.argentinadatos.com/v1";
 const RATES_ARG_API = "https://ratesarg.com/api";
 const BCRA_API = "https://api.bcra.gob.ar/estadisticas/v4.0";
 const BCRA_FIXED_TERM_30_ID = 1207;
+const MZA_AVERAGE_HALF_SPREAD = 5;
+const MIN_LOCAL_REPORTS = 3;
 
 const RATE_METADATA: Record<string, RateMetadata> = {
   USD_OFICIAL: {
@@ -105,7 +114,7 @@ const RATE_METADATA: Record<string, RateMetadata> = {
     spread: 3
   },
   USD_BLUE_MENDOZA: {
-    name: "Dólar Blue Mendoza",
+    name: "Referencia Blue Mendoza",
     country: "Mendoza",
     flag: "🇦🇷🇺🇸",
     type: "main",
@@ -116,7 +125,7 @@ const RATE_METADATA: Record<string, RateMetadata> = {
     spread: 3
   },
   USD_BLUE_PROMEDIO_MENDOZA: {
-    name: "Dolar Blue Promedio Mendoza",
+    name: "Dólar MZA Promedio",
     country: "Mendoza",
     flag: "\u{1F1E6}\u{1F1F7}\u{1F1FA}\u{1F1F8}",
     type: "main",
@@ -124,7 +133,7 @@ const RATE_METADATA: Record<string, RateMetadata> = {
     min: 100,
     max: 5000,
     maxDeviationPct: 0.12,
-    spread: 3
+    spread: MZA_AVERAGE_HALF_SPREAD
   },
   USD_MEP: {
     name: "Dólar Bolsa / MEP",
@@ -352,6 +361,12 @@ function median(values: number[]) {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
+function confidenceFromReports(reportCount: number): "low" | "medium" | "high" {
+  if (reportCount >= 16) return "high";
+  if (reportCount >= 6) return "medium";
+  return "low";
+}
+
 function variation(newValue: number | null, oldValue: number | null | undefined) {
   if (!newValue || !oldValue || oldValue <= 0) return 0;
   return Number((((newValue - oldValue) / oldValue) * 100).toFixed(2));
@@ -507,7 +522,7 @@ async function fetchCommunityBlueMendoza(source: SourceDefinition, supabase: Non
   const since = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("community_reports")
-    .select("rate, created_at")
+    .select("id, rate, created_at")
     .eq("status", "approved")
     .eq("include_in_stats", true)
     .in("currency", ["USD", "USD_BLUE", "USD_BLUE_MENDOZA"])
@@ -517,20 +532,37 @@ async function fetchCommunityBlueMendoza(source: SourceDefinition, supabase: Non
 
   if (error) return [];
 
-  const values = ((data as Array<{ rate: number; created_at: string }> | null) ?? [])
-    .map((report) => normalizeNumber(report.rate))
-    .filter((value): value is number => value !== null);
+  return ((data as Array<{ id: string; rate: number; created_at: string }> | null) ?? []).flatMap((report) => {
+    const value = normalizeNumber(report.rate);
+    if (value === null) return [];
 
-  const avg = average(values);
-  if (!avg) return [];
-
-  return [
-    makeReading(source, "USD_BLUE_MENDOZA", avg - 3, avg + 3, { count: values.length, criterion: "mendoza_range" }),
-    makeReading(source, "USD_BLUE_PROMEDIO_MENDOZA", avg - 3, avg + 3, {
-      count: values.length,
-      criterion: "mendoza_average"
-    })
-  ];
+    return [
+      {
+        ...makeReading(
+          source,
+          "USD_BLUE_MENDOZA",
+          value,
+          value,
+          { criterion: "mendoza_range", origin: "community", report_id: report.id },
+          report.created_at
+        ),
+        source_key: `${source.key}_${report.id}_range`,
+        source_name: `${source.name} ${report.id.slice(0, 8)}`
+      },
+      {
+        ...makeReading(
+          source,
+          "USD_BLUE_PROMEDIO_MENDOZA",
+          value,
+          value,
+          { criterion: "mendoza_average", origin: "community", report_id: report.id },
+          report.created_at
+        ),
+        source_key: `${source.key}_${report.id}_average`,
+        source_name: `${source.name} ${report.id.slice(0, 8)}`
+      }
+    ];
+  });
 }
 
 async function fetchSourceReadings(source: SourceDefinition, supabase: NonNullable<ReturnType<typeof createSupabaseAdminClient>>) {
@@ -606,7 +638,12 @@ async function fetchSourceReadings(source: SourceDefinition, supabase: NonNullab
 
 function validateReadings(code: string, readings: SourceReading[]) {
   const metadata = metadataFor(code);
-  const staleLimitMs = metadata.market === "indicator" ? 10 * 24 * 60 * 60 * 1000 : 36 * 60 * 60 * 1000;
+  const isMendozaReference = code === "USD_BLUE_MENDOZA" || code === "USD_BLUE_PROMEDIO_MENDOZA";
+  const staleLimitMs = isMendozaReference
+    ? 72 * 60 * 60 * 1000
+    : metadata.market === "indicator"
+      ? 10 * 24 * 60 * 60 * 1000
+      : 36 * 60 * 60 * 1000;
   const now = Date.now();
   const bounded = readings.map((reading) => {
     const visibleValues = [reading.buy_price, reading.sell_price].filter((value): value is number => value !== null);
@@ -669,11 +706,55 @@ function aggregate(code: string, readings: SourceReading[], oldRate: Rate | unde
   } else if (code === "USD_BLUE_MENDOZA") {
     buyPrice = minValue(buyValues);
     sellPrice = maxValue(sellValues);
-    source = `Rango amplio Mendoza validado (${accepted.length} fuente${accepted.length === 1 ? "" : "s"})`;
+    source = `Rango Mendoza validado (${accepted.length} dato${accepted.length === 1 ? "" : "s"})`;
   } else if (code === "USD_BLUE_PROMEDIO_MENDOZA") {
-    buyPrice = average(buyValues);
-    sellPrice = average(sellValues);
-    source = `Promedio Mendoza validado (${accepted.length} fuente${accepted.length === 1 ? "" : "s"})`;
+    const communityReadings = accepted.filter((reading) => reading.payload?.origin === "community");
+    const nationalReadings = accepted.filter((reading) => reading.payload?.origin === "national");
+    const useLocalAverage = communityReadings.length >= MIN_LOCAL_REPORTS;
+    const centralReadings = useLocalAverage
+      ? accepted
+      : nationalReadings.length
+        ? nationalReadings
+        : accepted;
+    const centralValue = average(
+      centralReadings.map((reading) => reading.midpoint).filter((value): value is number => value !== null)
+    );
+    if (centralValue === null) return null;
+
+    const confidence = confidenceFromReports(communityReadings.length);
+    const sourceCount = new Set(nationalReadings.map((reading) => reading.source_key)).size;
+    const method = useLocalAverage ? "local_average" : "national_fallback";
+    buyPrice = Number(Math.max(0, centralValue - MZA_AVERAGE_HALF_SPREAD).toFixed(4));
+    sellPrice = Number((centralValue + MZA_AVERAGE_HALF_SPREAD).toFixed(4));
+    source = [
+      "Dólar MZA Promedio",
+      `confidence=${confidence}`,
+      `reports=${communityReadings.length}`,
+      `sources=${sourceCount}`,
+      `method=${method}`,
+      `center=${centralValue}`
+    ].join(" | ");
+
+    return {
+      code,
+      name: metadata.name,
+      country: metadata.country,
+      flag: metadata.flag,
+      type: metadata.type,
+      buy_price: buyPrice,
+      sell_price: sellPrice,
+      variation: variation(sellPrice, oldRate?.sell_price ?? oldRate?.buy_price),
+      source,
+      is_visible: true,
+      updated_at: updatedAt,
+      calculation: {
+        center: centralValue,
+        confidence,
+        method,
+        report_count: communityReadings.length,
+        source_count: sourceCount
+      }
+    };
   } else if (metadata.market === "parallel") {
     const avgMidpoint = average(accepted.map((reading) => reading.midpoint).filter((value): value is number => value !== null));
     if (avgMidpoint === null) return null;
@@ -783,7 +864,7 @@ export async function updateRatesFromSources() {
       rate_code: "USD_BLUE_PROMEDIO_MENDOZA",
       source_key: `${reading.source_key}_mendoza_avg_ref`,
       source_name: `${reading.source_name} promedio Mendoza`,
-      payload: { ...(reading.payload ?? {}), criterion: "mendoza_average" },
+      payload: { ...(reading.payload ?? {}), criterion: "mendoza_average", origin: "national" },
       priority: reading.priority + 6
     }))
   );
@@ -857,7 +938,20 @@ export async function updateRatesFromSources() {
   }
 
   if (updates.length) {
-    const { error } = await supabase.from("rates").upsert(updates, { onConflict: "code" });
+    const rateRows = updates.map((update) => ({
+      code: update.code,
+      name: update.name,
+      country: update.country,
+      flag: update.flag,
+      type: update.type,
+      buy_price: update.buy_price,
+      sell_price: update.sell_price,
+      variation: update.variation,
+      source: update.source,
+      is_visible: update.is_visible,
+      updated_at: update.updated_at
+    }));
+    const { error } = await supabase.from("rates").upsert(rateRows, { onConflict: "code" });
     if (error) throw new Error(getErrorMessage(error, "No se pudieron guardar las cotizaciones."));
   }
 
@@ -884,10 +978,22 @@ export async function updateRatesFromSources() {
     sell_price: update.sell_price,
     variation: update.variation,
     source_count: validatedReadings.filter((reading) => reading.rate_code === update.code && reading.status === "accepted").length,
-    confidence_score: Math.min(
-      100,
-      Math.max(35, validatedReadings.filter((reading) => reading.rate_code === update.code && reading.status === "accepted").length * 32)
-    )
+    confidence_score:
+      update.calculation?.confidence === "high"
+        ? 95
+        : update.calculation?.confidence === "medium"
+          ? 70
+          : update.calculation
+            ? 35
+            : Math.min(
+                100,
+                Math.max(
+                  35,
+                  validatedReadings.filter(
+                    (reading) => reading.rate_code === update.code && reading.status === "accepted"
+                  ).length * 32
+                )
+              )
   }));
   if (historyRows.length) {
     const optionalError = await insertOptional(supabase, "rate_history", historyRows);
@@ -921,7 +1027,8 @@ export async function updateRatesFromSources() {
       .map((reading) => ({
         source: reading.source_name,
         reason: reading.reason
-      }))
+      })),
+    calculation: update.calculation ?? null
   }));
 
   const { error: settingsError } = await supabase.from("admin_settings").upsert(

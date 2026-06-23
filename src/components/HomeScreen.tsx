@@ -20,6 +20,7 @@ import { commercialPlans } from "@/lib/commercial";
 import { INDICATOR_CODES, MAIN_RATE_CODES, TRAVEL_RATE_CODES } from "@/lib/constants";
 import { formatDateTime, formatPercent, shortNumber } from "@/lib/format";
 import { useAccount, useRates } from "@/lib/hooks";
+import { getRateDisplayName } from "@/lib/rate-presentation";
 import type { Rate } from "@/lib/types";
 
 const learningLevels = [
@@ -125,7 +126,9 @@ export function HomeScreen() {
   const isRegistered = Boolean(account.user);
   const mainRates = pickRates(rates, MAIN_RATE_CODES);
   const travelRates = pickRates(rates, TRAVEL_RATE_CODES);
-  const previewRates = mainRates.filter((rate) => ["USD_BLUE", "USD_BLUE_MENDOZA"].includes(rate.code)).slice(0, 2);
+  const previewRates = mainRates
+    .filter((rate) => ["USD_BLUE_PROMEDIO_MENDOZA", "USD_BLUE_MENDOZA"].includes(rate.code))
+    .slice(0, 2);
   const hasRates = rates.length > 0;
   const favoriteCodes = new Set(account.favorites.map((favorite) => favorite.rate_code));
 
@@ -152,7 +155,10 @@ export function HomeScreen() {
 
     if (!result.error) {
       await account.reload();
-      setFavoriteStatus(wasFavorite ? `${rate.name} se quitó de tus favoritas.` : `${rate.name} se agregó a tus favoritas.`);
+      const displayName = getRateDisplayName(rate);
+      setFavoriteStatus(
+        wasFavorite ? `${displayName} se quitó de tus favoritas.` : `${displayName} se agregó a tus favoritas.`
+      );
     } else {
       setFavoriteStatus("No pudimos actualizar tus favoritas. Intentá nuevamente.");
     }

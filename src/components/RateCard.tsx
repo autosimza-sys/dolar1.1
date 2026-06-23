@@ -4,12 +4,13 @@ import Link from "next/link";
 import { Bell, Clock3, Info, Star, TrendingDown, TrendingUp } from "lucide-react";
 import { FlagBadge } from "@/components/FlagBadge";
 import { formatDateTime, formatMoney, formatPercent } from "@/lib/format";
+import { getMzaConfidence, getRateDisplayName } from "@/lib/rate-presentation";
 import type { Rate } from "@/lib/types";
 
 const BLUE_HELPERS: Record<string, string> = {
   USD_BLUE: "Mejor oportunidad detectada entre las fuentes monitoreadas.",
-  USD_BLUE_MENDOZA: "Rango amplio del mercado mendocino segun las fuentes monitoreadas.",
-  USD_BLUE_PROMEDIO_MENDOZA: "Promedio calculado entre las fuentes mendocinas monitoreadas."
+  USD_BLUE_MENDOZA: "Rango de referencia entre los valores mendocinos validados.",
+  USD_BLUE_PROMEDIO_MENDOZA: "Promedio central propio de Dólar MZA con spread corto de $10."
 };
 
 function maskedMoney(value: number | null) {
@@ -50,16 +51,20 @@ export function RateCard({
   const isUp = rate.variation >= 0;
   const TrendIcon = isUp ? TrendingUp : TrendingDown;
   const helper = BLUE_HELPERS[rate.code];
+  const displayName = getRateDisplayName(rate);
+  const confidence = getMzaConfidence(rate);
+  const isMzaAverage = rate.code === "USD_BLUE_PROMEDIO_MENDOZA";
   const spread =
     rate.buy_price !== null && rate.sell_price !== null ? Math.max(0, rate.sell_price - rate.buy_price) : null;
 
   return (
-    <article className="rate-card">
+    <article className={`rate-card ${isMzaAverage ? "rate-card--mza-index" : ""}`}>
       <div className="rate-card__top">
         <div className="rate-card__identity">
           <FlagBadge rate={rate} />
           <div>
-            <h3>{rate.name}</h3>
+            {isMzaAverage ? <span className="rate-card__index-label">Índice propio Mendoza</span> : null}
+            <h3>{displayName}</h3>
             <p>{rate.country}</p>
           </div>
         </div>
@@ -72,7 +77,7 @@ export function RateCard({
           ) : null}
           <button
             className={`rate-card__star ${isFavorite ? "is-selected" : ""}`}
-            aria-label={isFavorite ? `Quitar ${rate.name} de favoritas` : `Agregar ${rate.name} a favoritas`}
+            aria-label={isFavorite ? `Quitar ${displayName} de favoritas` : `Agregar ${displayName} a favoritas`}
             aria-pressed={isFavorite}
             disabled={isFavoriteLoading}
             style={{
@@ -98,7 +103,7 @@ export function RateCard({
         </div>
       </div>
 
-      <div className="quote-grid" aria-label={`${rate.name} compra y venta`}>
+      <div className="quote-grid" aria-label={`${displayName} compra y venta`}>
         <div>
           <span>Compra</span>
           <strong>{preview ? maskedMoney(rate.buy_price) : formatMoney(rate.buy_price, true)}</strong>
@@ -111,6 +116,19 @@ export function RateCard({
 
       {!preview && spread !== null ? (
         <span className="spread-line rate-card__spread">Spread {formatMoney(spread, true)}</span>
+      ) : null}
+
+      {!preview && confidence ? (
+        <div className={`rate-card__confidence rate-card__confidence--${confidence.level}`}>
+          <span aria-hidden />
+          <strong>{confidence.label}</strong>
+          <small>
+            {confidence.reportCount
+              ? `Basado en ${confidence.reportCount} reportes y ${confidence.sourceCount} fuentes validadas.`
+              : `Basado en ${confidence.sourceCount} fuentes validadas.`}
+            {confidence.usedFallback ? " Referencia nacional de respaldo." : ""}
+          </small>
+        </div>
       ) : null}
 
       <div className="rate-card__footer">
