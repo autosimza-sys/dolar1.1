@@ -5,6 +5,7 @@ import {
   parseOfficialNumbers,
   runAutomaticGiveawayFallback,
   syncGiveawayTickets,
+  updateGiveawayLegalText,
   updateGiveawayStatus,
   upsertGiveaway
 } from "@/lib/giveaways";
@@ -39,6 +40,7 @@ type AdminAction =
   | "test_mercado_pago_config"
   | "resolve_support_message"
   | "upsert_giveaway"
+  | "update_giveaway_legal"
   | "set_giveaway_status"
   | "sync_giveaway_tickets"
   | "load_giveaway_official_result"
@@ -460,6 +462,19 @@ export async function POST(request: NextRequest) {
 
       await updateGiveawayStatus(supabaseAdmin, giveawayId, status);
       return NextResponse.json({ ok: true, message: "Estado del sorteo actualizado." });
+    }
+
+    if (body.action === "update_giveaway_legal") {
+      const giveawayId = requireString(body.giveawayId, "giveawayId");
+      const legalText = requireString(body.payload?.legal_text, "bases y condiciones");
+      const legalVersion = String(body.payload?.legal_version ?? "1.0");
+      const giveaway = await updateGiveawayLegalText(supabaseAdmin, giveawayId, legalText, legalVersion);
+
+      return NextResponse.json({
+        ok: true,
+        message: "Bases y condiciones actualizadas.",
+        giveaway
+      });
     }
 
     if (body.action === "sync_giveaway_tickets") {

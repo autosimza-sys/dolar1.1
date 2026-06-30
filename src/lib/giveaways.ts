@@ -181,6 +181,40 @@ export async function updateGiveawayStatus(admin: SupabaseClient, giveawayId: st
   });
 }
 
+export async function updateGiveawayLegalText(
+  admin: SupabaseClient,
+  giveawayId: string,
+  legalText: string,
+  legalVersion: string
+) {
+  const normalizedText = legalText.trim();
+  const normalizedVersion = legalVersion.trim() || "1.0";
+
+  if (!normalizedText) {
+    throw new Error("Las bases y condiciones no pueden quedar vacias.");
+  }
+
+  const { data, error } = await admin
+    .from("giveaways")
+    .update({
+      legal_text: normalizedText,
+      legal_version: normalizedVersion
+    })
+    .eq("id", giveawayId)
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  await admin.from("giveaway_logs").insert({
+    giveaway_id: giveawayId,
+    action: "legal_updated",
+    detail: { legal_version: normalizedVersion }
+  });
+
+  return data as Giveaway;
+}
+
 export async function findWinnerByOfficialNumbers(
   admin: SupabaseClient,
   giveawayId: string,

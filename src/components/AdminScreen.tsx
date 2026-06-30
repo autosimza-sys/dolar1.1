@@ -721,6 +721,24 @@ export function AdminScreen() {
     );
   }
 
+  async function saveGiveawayLegal(event: FormEvent<HTMLFormElement>, giveaway: Giveaway) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    await runPanelAction(
+      `giveaway-legal:${giveaway.id}`,
+      {
+        action: "update_giveaway_legal",
+        giveawayId: giveaway.id,
+        payload: {
+          legal_text: String(formData.get("legal_text") ?? ""),
+          legal_version: String(formData.get("legal_version") ?? giveaway.legal_version)
+        }
+      },
+      "Bases y condiciones actualizadas."
+    );
+  }
+
   async function syncGiveaways() {
     await runPanelAction("sync_giveaway_tickets", { action: "sync_giveaway_tickets" }, "Tickets sincronizados.");
   }
@@ -1514,6 +1532,26 @@ export function AdminScreen() {
                         </strong>
                       </article>
                     </div>
+
+                    <form className="admin-create admin-create--compact" onSubmit={(event) => saveGiveawayLegal(event, giveaway)}>
+                      <label className="field field--tight">
+                        <span>Bases y condiciones</span>
+                        <textarea
+                          defaultValue={giveaway.legal_text}
+                          name="legal_text"
+                          placeholder="Texto legal visible para el usuario"
+                          rows={5}
+                        />
+                      </label>
+                      <label className="field field--tight">
+                        <span>Version legal</span>
+                        <input defaultValue={giveaway.legal_version} name="legal_version" placeholder="1.0" />
+                      </label>
+                      <button className="button button--full" disabled={isActionLoading(`giveaway-legal:${giveaway.id}`)} type="submit">
+                        <Save size={17} />
+                        {isActionLoading(`giveaway-legal:${giveaway.id}`) ? "Guardando bases..." : "Guardar bases"}
+                      </button>
+                    </form>
 
                     <div className="button-row">
                       <button className="button button--small button--ghost" type="button" onClick={() => setGiveawayStatus(giveaway, "active")}>
