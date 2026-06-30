@@ -261,7 +261,7 @@ declare
   existing_tracking integer;
   existing_referral integer;
   existing_total integer;
-  ticket_number integer;
+  generated_ticket_number integer;
   inserted_count integer := 0;
   ticket_id uuid;
 begin
@@ -321,12 +321,12 @@ begin
 
         while existing_tracking < tracking_extra_target and existing_total < draw_record.max_numbers_per_user loop
           ticket_id := null;
-          ticket_number := public.giveaway_random_ticket_number(draw_record.id);
+          generated_ticket_number := public.giveaway_random_ticket_number(draw_record.id);
           insert into public.giveaway_tickets(giveaway_id, user_id, ticket_number, origin, origin_detail)
           values (
             draw_record.id,
             profile_record.id,
-            ticket_number,
+            generated_ticket_number,
             'Plan Seguimiento',
             jsonb_build_object('plan', 'tracking_monthly')
           )
@@ -337,7 +337,7 @@ begin
           inserted_count := inserted_count + 1;
 
           insert into public.giveaway_logs(giveaway_id, user_id, ticket_id, action, detail)
-          values (draw_record.id, profile_record.id, ticket_id, 'ticket_assigned', jsonb_build_object('origin', 'Plan Seguimiento', 'ticket_number', ticket_number));
+          values (draw_record.id, profile_record.id, ticket_id, 'ticket_assigned', jsonb_build_object('origin', 'Plan Seguimiento', 'ticket_number', generated_ticket_number));
         end loop;
       end if;
 
@@ -354,12 +354,12 @@ begin
 
         while existing_tracking < draw_record.premium_chances and existing_total < draw_record.max_numbers_per_user loop
           ticket_id := null;
-          ticket_number := public.giveaway_random_ticket_number(draw_record.id);
+          generated_ticket_number := public.giveaway_random_ticket_number(draw_record.id);
           insert into public.giveaway_tickets(giveaway_id, user_id, ticket_number, origin, origin_detail)
           values (
             draw_record.id,
             profile_record.id,
-            ticket_number,
+            generated_ticket_number,
             'otro',
             jsonb_build_object('plan', 'premium_monthly')
           )
@@ -370,7 +370,7 @@ begin
           inserted_count := inserted_count + 1;
 
           insert into public.giveaway_logs(giveaway_id, user_id, ticket_id, action, detail)
-          values (draw_record.id, profile_record.id, ticket_id, 'ticket_assigned', jsonb_build_object('origin', 'premium_preparado', 'ticket_number', ticket_number));
+          values (draw_record.id, profile_record.id, ticket_id, 'ticket_assigned', jsonb_build_object('origin', 'premium_preparado', 'ticket_number', generated_ticket_number));
         end loop;
       end if;
 
@@ -392,12 +392,12 @@ begin
 
         while existing_referral < referral_extra_target and existing_total < draw_record.max_numbers_per_user loop
           ticket_id := null;
-          ticket_number := public.giveaway_random_ticket_number(draw_record.id);
+          generated_ticket_number := public.giveaway_random_ticket_number(draw_record.id);
           insert into public.giveaway_tickets(giveaway_id, user_id, ticket_number, origin, origin_detail)
           values (
             draw_record.id,
             profile_record.id,
-            ticket_number,
+            generated_ticket_number,
             'referido',
             jsonb_build_object('valid_referrals', referral_valid_count)
           )
@@ -408,7 +408,7 @@ begin
           inserted_count := inserted_count + 1;
 
           insert into public.giveaway_logs(giveaway_id, user_id, ticket_id, action, detail)
-          values (draw_record.id, profile_record.id, ticket_id, 'ticket_assigned', jsonb_build_object('origin', 'referido', 'ticket_number', ticket_number, 'valid_referrals', referral_valid_count));
+          values (draw_record.id, profile_record.id, ticket_id, 'ticket_assigned', jsonb_build_object('origin', 'referido', 'ticket_number', generated_ticket_number, 'valid_referrals', referral_valid_count));
         end loop;
       end if;
     end loop;
