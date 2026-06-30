@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAdminGiveawayData } from "@/lib/giveaways";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +100,8 @@ export async function GET() {
     .order("created_at", { ascending: false })
     .limit(80);
 
+  const giveawayData = await getAdminGiveawayData(supabaseAdmin);
+
   const firstError =
     rates.error ??
     profiles.error ??
@@ -133,6 +136,10 @@ export async function GET() {
     referralEvents: referralEvents.error ? [] : (referralEvents.data ?? []),
     referralCreditLedger: referralCreditLedger.error ? [] : (referralCreditLedger.data ?? []),
     supportMessages: supportMessages.error ? [] : (supportMessages.data ?? []),
+    giveaways: giveawayData.giveaways,
+    giveawayTickets: giveawayData.giveawayTickets,
+    giveawayResults: giveawayData.giveawayResults,
+    giveawayLogs: giveawayData.giveawayLogs,
     blueMendozaManual: blueMendozaManual.data?.value ?? null,
     communityFiltersEnabled: communityFilters.data?.value !== false,
     systemStatus: {

@@ -261,3 +261,95 @@ export type SupportMessage = {
   created_at: string;
   resolved_at: string | null;
 };
+
+export type GiveawayStatus = "draft" | "active" | "paused" | "closed" | "completed";
+
+export type GiveawayType = "monthly" | "annual" | "custom";
+
+export type Giveaway = {
+  id: string;
+  slug: string;
+  name: string;
+  type: GiveawayType;
+  prize_label: string;
+  prize_currency: string;
+  prize_amount: number;
+  prize_ars_equivalent: number | null;
+  draw_date: string;
+  draw_time: string;
+  status: GiveawayStatus;
+  starts_at: string;
+  closes_at: string | null;
+  selection_method: string;
+  max_numbers_per_user: number;
+  allow_free: boolean;
+  allow_tracking: boolean;
+  allow_premium: boolean;
+  allow_referrals: boolean;
+  free_chances: number;
+  tracking_chances: number;
+  premium_chances: number;
+  referral_step: number;
+  referral_bonus_chances: number;
+  referral_bonus_max: number;
+  rules: Record<string, unknown> | null;
+  legal_text: string;
+  legal_version: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GiveawayTicketOrigin =
+  | "registro gratuito"
+  | "Plan Seguimiento"
+  | "referido"
+  | "ajuste administrativo"
+  | "sorteo automatico"
+  | "otro";
+
+export type GiveawayTicket = {
+  id: string;
+  giveaway_id: string;
+  user_id: string;
+  ticket_number: number;
+  origin: GiveawayTicketOrigin;
+  origin_detail: Record<string, unknown> | null;
+  status: "active" | "void" | "winner";
+  assigned_at: string;
+};
+
+export type GiveawayResult = {
+  id: string;
+  giveaway_id: string;
+  source: string;
+  official_draw_date: string | null;
+  official_numbers: number[];
+  winning_number: number | null;
+  winning_prize_position: number | null;
+  winner_user_id: string | null;
+  winning_ticket_id: string | null;
+  method: "official_exact" | "automatic_fallback" | "manual_admin";
+  participant_ticket_count: number;
+  seed: string | null;
+  random_index: number | null;
+  created_at: string;
+};
+
+export type GiveawayLog = {
+  id: string;
+  giveaway_id: string | null;
+  user_id: string | null;
+  ticket_id: string | null;
+  action: string;
+  detail: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type UserGiveawaySummary = {
+  giveaway: Giveaway;
+  tickets: GiveawayTicket[];
+  valid_referrals: number;
+  referral_next_target: number;
+  referral_progress_current: number;
+  referral_progress_target: number;
+};

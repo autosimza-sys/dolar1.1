@@ -25,9 +25,10 @@ import { AuthForm } from "@/components/AuthForm";
 import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_TYPES } from "@/lib/constants";
 import { formatDateTime, formatMoney, formatPercent, shortNumber } from "@/lib/format";
+import { formatTicketNumber } from "@/lib/giveaway-format";
 import { getAdminEmails, useAccount, useEducationCards, useRates } from "@/lib/hooks";
 import { getRateDisplayName } from "@/lib/rate-presentation";
-import type { Rate, ReferralSummary, UserAlert } from "@/lib/types";
+import type { Rate, ReferralSummary, UserAlert, UserGiveawaySummary } from "@/lib/types";
 
 const supportReasons = ["Problema con mi cuenta", "Problema con contrasena", "Problema con alertas", "Problema con pago", "Otro"];
 
@@ -128,6 +129,8 @@ export function AccountScreen() {
   const [isSavingFavorites, setIsSavingFavorites] = useState(false);
   const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
+  const [giveawaySummaries, setGiveawaySummaries] = useState<UserGiveawaySummary[]>([]);
+  const [giveawayError, setGiveawayError] = useState<string | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
   const [isSendingSupport, setIsSendingSupport] = useState(false);
   const [supportStatus, setSupportStatus] = useState<string | null>(null);
@@ -145,6 +148,7 @@ export function AccountScreen() {
   const rateByCode = useMemo(() => new Map(rates.map((rate) => [rate.code, rate])), [rates]);
   const activeAlerts = useMemo(() => account.alerts.filter((alert) => alert.is_active), [account.alerts]);
   const latestAlerts = useMemo(() => activeAlerts.slice(0, 3), [activeAlerts]);
+  const nextGiveaway = giveawaySummaries[0] ?? null;
   const favoriteRates = useMemo(
     () =>
       account.favorites
@@ -202,6 +206,33 @@ export function AccountScreen() {
     }
 
     void loadReferralSummary();
+  }, [account.user]);
+
+  useEffect(() => {
+    async function loadGiveaways() {
+      if (!account.user) {
+        setGiveawaySummaries([]);
+        setGiveawayError(null);
+        return;
+      }
+
+      const response = await fetch("/api/giveaways/me", { cache: "no-store" });
+      const payload = (await response.json().catch(() => ({}))) as {
+        giveaways?: UserGiveawaySummary[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        setGiveawaySummaries([]);
+        setGiveawayError(payload.error ?? "Sorteos en preparacion.");
+        return;
+      }
+
+      setGiveawaySummaries(payload.giveaways ?? []);
+      setGiveawayError(null);
+    }
+
+    void loadGiveaways();
   }, [account.user]);
 
   useEffect(() => {
@@ -490,6 +521,81 @@ export function AccountScreen() {
             <Link className="button" href="/premium">
               Ver planes
             </Link>
+          </div>
+        )}
+      </section>
+
+      <section className="account-panel account-giveaway-panel">
+        <div className="account-panel__head">
+          <div>
+            <p className="eyebrow">Mis sorteos</p>
+            <h2>{nextGiveaway ? nextGiveaway.giveaway.name : "Proximos sorteos"}</h2>
+          </div>
+          <Gift size={22} />
+        </div>
+
+        {nextGiveaway ? (
+          <>
+            <div className="account-giveaway-summary">
+              <article>
+                <span>Premio</span>
+                <strong>{nextGiveaway.giveaway.prize_label}</strong>
+              </article>
+              <article>
+                <span>Fecha</span>
+                <strong>
+                  {nextGiveaway.giveaway.draw_date} {nextGiveaway.giveaway.draw_time}
+                </strong>
+              </article>
+              <article>
+                <span>Numeros</span>
+                <strong>{nextGiveaway.tickets.length}</strong>
+              </article>
+            </div>
+
+            <div className="giveaway-ticket-list" aria-label="Mis numeros para el proximo sorteo">
+              {nextGiveaway.tickets.length ? (
+                nextGiveaway.tickets.map((ticket) => (
+                  <span key={ticket.id} title={ticket.origin}>
+                    {formatTicketNumber(ticket.ticket_number)}
+                  </span>
+                ))
+              ) : (
+                <small>Estamos preparando tus numeros.</small>
+              )}
+            </div>
+
+            <div className="account-giveaway-progress">
+              <div>
+                <strong>Referidos para sumar mas numeros</strong>
+                <span>
+                  {nextGiveaway.referral_progress_current} / {nextGiveaway.referral_progress_target}
+                </span>
+              </div>
+              <div className="progress-bar" aria-hidden="true">
+                <span
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      nextGiveaway.referral_progress_target
+                        ? (nextGiveaway.referral_progress_current / nextGiveaway.referral_progress_target) * 100
+                        : 100
+                    )}%`
+                  }}
+                />
+              </div>
+              <p>Invita amigos y suma mas numeros para el proximo sorteo. Cada 10 referidos validos suma 1 numero extra, hasta 5.</p>
+            </div>
+
+            <details className="giveaway-legal">
+              <summary>Bases y condiciones</summary>
+              <p>{nextGiveaway.giveaway.legal_text}</p>
+            </details>
+          </>
+        ) : (
+          <div className="empty-state account-onboarding">
+            <strong>{giveawayError ? "Sorteos en preparacion" : "Todavia no hay un sorteo activo."}</strong>
+            <span>{giveawayError ?? "Cuando se active el proximo sorteo vas a ver tus numeros aca."}</span>
           </div>
         )}
       </section>

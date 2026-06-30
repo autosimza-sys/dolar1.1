@@ -1,5 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { processAlerts, processPendingNotificationJobs } from "@/lib/alert-processor";
+import {
+  findWinnerByOfficialNumbers,
+  parseOfficialNumbers,
+  runAutomaticGiveawayFallback,
+  syncGiveawayTickets,
+  updateGiveawayStatus,
+  upsertGiveaway
+} from "@/lib/giveaways";
 import { sendAlertEmail } from "@/lib/notifications";
 import { updateRatesFromSources } from "@/lib/rate-updater";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
@@ -29,7 +37,12 @@ type AdminAction =
   | "apply_manual_credit"
   | "test_email"
   | "test_mercado_pago_config"
-  | "resolve_support_message";
+  | "resolve_support_message"
+  | "upsert_giveaway"
+  | "set_giveaway_status"
+  | "sync_giveaway_tickets"
+  | "load_giveaway_official_result"
+  | "run_giveaway_automatic_fallback";
 
 type AdminActionBody = {
   action?: AdminAction;
@@ -38,10 +51,13 @@ type AdminActionBody = {
   reportId?: string;
   alertId?: string;
   referralId?: string;
+  giveawayId?: string;
   userId?: string;
   status?: string;
   enabled?: boolean;
   plan?: string;
+  officialNumbers?: unknown;
+  officialDrawDate?: string | null;
   payload?: Record<string, unknown>;
 };
 
@@ -419,6 +435,64 @@ export async function POST(request: NextRequest) {
           ? `Falta configurar: ${missing.join(", ")}.`
           : "Mercado Pago tiene las variables principales configuradas.",
         missing
+      });
+    }
+
+    if (body.action === "upsert_giveaway") {
+      const giveaway = await upsertGiveaway(supabaseAdmin, body.payload ?? {});
+      return NextResponse.json({
+        ok: true,
+        message: "Sorteo guardado correctamente.",
+        giveaway
+      });
+    }
+
+    if (body.action === "set_giveaway_status") {
+      const giveawayId = requireString(body.giveawayId, "giveawayId");
+      const status =
+        body.status === "draft" ||
+        body.status === "active" ||
+        body.status === "paused" ||
+        body.status === "closed" ||
+        body.status === "completed"
+          ? body.status
+          : "paused";
+
+      await updateGiveawayStatus(supabaseAdmin, giveawayId, status);
+      return NextResponse.json({ ok: true, message: "Estado del sorteo actualizado." });
+    }
+
+    if (body.action === "sync_giveaway_tickets") {
+      const result = await syncGiveawayTickets(supabaseAdmin, body.userId ?? null);
+      return NextResponse.json({
+        ok: true,
+        message: `Tickets sincronizados. Nuevos: ${Number(result?.inserted ?? 0)}.`,
+        result
+      });
+    }
+
+    if (body.action === "load_giveaway_official_result") {
+      const giveawayId = requireString(body.giveawayId, "giveawayId");
+      const officialNumbers = parseOfficialNumbers(body.officialNumbers ?? body.payload?.official_numbers);
+      const result = await findWinnerByOfficialNumbers(supabaseAdmin, giveawayId, officialNumbers, body.officialDrawDate);
+
+      return NextResponse.json({
+        ok: true,
+        message: result
+          ? `Ganador encontrado con el numero ${String(result.winning_number).padStart(4, "0")}.`
+          : "Resultado cargado. No hubo coincidencia oficial del premio 1 al 20.",
+        result
+      });
+    }
+
+    if (body.action === "run_giveaway_automatic_fallback") {
+      const giveawayId = requireString(body.giveawayId, "giveawayId");
+      const result = await runAutomaticGiveawayFallback(supabaseAdmin, giveawayId);
+
+      return NextResponse.json({
+        ok: true,
+        message: `Sorteo automatico ejecutado. Numero ganador: ${String(result.winning_number).padStart(4, "0")}.`,
+        result
       });
     }
 

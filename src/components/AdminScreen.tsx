@@ -11,9 +11,11 @@ import {
   Clock3,
   CreditCard,
   Database,
+  Download,
   Eye,
   EyeOff,
   FileText,
+  Gift,
   LifeBuoy,
   Mail,
   Pause,
@@ -23,8 +25,11 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Shuffle,
   Sparkles,
+  Ticket,
   Trash2,
+  Trophy,
   Users,
   WalletCards
 } from "lucide-react";
@@ -33,11 +38,16 @@ import { FlagBadge } from "@/components/FlagBadge";
 import { ALERT_TYPES } from "@/lib/constants";
 import { demoRates } from "@/lib/demo-data";
 import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatTicketNumber } from "@/lib/giveaway-format";
 import { getAdminEmails, useAccount } from "@/lib/hooks";
 import type {
   AnalyticsEvent,
   CommunityReport,
   EducationCard,
+  Giveaway,
+  GiveawayLog,
+  GiveawayResult,
+  GiveawayTicket,
   NotificationJob,
   PaymentEvent,
   Profile,
@@ -78,6 +88,10 @@ type AdminData = {
   referralEvents: ReferralEvent[];
   referralCreditLedger: ReferralCreditLedger[];
   supportMessages: SupportMessage[];
+  giveaways: Giveaway[];
+  giveawayTickets: GiveawayTicket[];
+  giveawayResults: GiveawayResult[];
+  giveawayLogs: GiveawayLog[];
   systemStatus: SystemStatus;
   blueMendozaManual: {
     enabled?: boolean;
@@ -93,6 +107,7 @@ type AdminTab =
   | "market"
   | "users"
   | "memberships"
+  | "giveaways"
   | "alerts"
   | "community"
   | "analytics"
@@ -127,6 +142,10 @@ const emptyAdminData: AdminData = {
   referralEvents: [],
   referralCreditLedger: [],
   supportMessages: [],
+  giveaways: [],
+  giveawayTickets: [],
+  giveawayResults: [],
+  giveawayLogs: [],
   systemStatus: emptySystemStatus,
   blueMendozaManual: null,
   communityFiltersEnabled: true
@@ -137,6 +156,7 @@ const adminTabs: Array<{ id: AdminTab; label: string; helper: string }> = [
   { id: "market", label: "Mercado", helper: "Cotizaciones" },
   { id: "users", label: "Usuarios", helper: "Leads y cuentas" },
   { id: "memberships", label: "Membresias", helper: "Cobros" },
+  { id: "giveaways", label: "Sorteos", helper: "Tickets y premios" },
   { id: "alerts", label: "Alertas", helper: "Envios" },
   { id: "community", label: "Comunidad", helper: "Reportes" },
   { id: "analytics", label: "Analytics", helper: "Uso real" },
@@ -402,6 +422,18 @@ export function AdminScreen() {
     [data.rates]
   );
   const latestCronLog = data.sourceUpdateLogs[0];
+  const activeGiveaways = useMemo(() => data.giveaways.filter((giveaway) => giveaway.status === "active"), [data.giveaways]);
+  const giveawayTicketCount = useMemo(() => countBy(data.giveawayTickets, (ticket) => ticket.giveaway_id), [data.giveawayTickets]);
+  const giveawayParticipantCount = useMemo(
+    () =>
+      data.giveawayTickets.reduce<Record<string, Set<string>>>((acc, ticket) => {
+        if (!acc[ticket.giveaway_id]) acc[ticket.giveaway_id] = new Set();
+        acc[ticket.giveaway_id].add(ticket.user_id);
+        return acc;
+      }, {}),
+    [data.giveawayTickets]
+  );
+  const latestGiveawayResult = data.giveawayResults[0];
 
   const filteredProfiles = useMemo(() => {
     const query = userQuery.trim().toLowerCase();
@@ -463,6 +495,10 @@ export function AdminScreen() {
         referralEvents: adminData.referralEvents ?? [],
         referralCreditLedger: adminData.referralCreditLedger ?? [],
         supportMessages: adminData.supportMessages ?? [],
+        giveaways: adminData.giveaways ?? [],
+        giveawayTickets: adminData.giveawayTickets ?? [],
+        giveawayResults: adminData.giveawayResults ?? [],
+        giveawayLogs: adminData.giveawayLogs ?? [],
         systemStatus: adminData.systemStatus ?? emptySystemStatus,
         blueMendozaManual: adminData.blueMendozaManual ?? null,
         communityFiltersEnabled: adminData.communityFiltersEnabled !== false
@@ -643,6 +679,79 @@ export function AdminScreen() {
       { action: "resolve_support_message", payload: { id: message.id } },
       "Mensaje de soporte resuelto."
     );
+  }
+
+  async function saveGiveaway(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const payload = {
+      slug: String(formData.get("slug") ?? "").trim(),
+      name: String(formData.get("name") ?? "").trim(),
+      type: String(formData.get("type") ?? "monthly"),
+      prize_label: String(formData.get("prize_label") ?? "").trim(),
+      prize_currency: String(formData.get("prize_currency") ?? "USD").trim(),
+      prize_amount: Number(formData.get("prize_amount") ?? 0),
+      prize_ars_equivalent: asNumber(formData.get("prize_ars_equivalent")),
+      draw_date: String(formData.get("draw_date") ?? ""),
+      draw_time: String(formData.get("draw_time") ?? "22:00"),
+      status: String(formData.get("status") ?? "active"),
+      starts_at: String(formData.get("starts_at") ?? new Date().toISOString()),
+      closes_at: String(formData.get("closes_at") ?? ""),
+      max_numbers_per_user: Number(formData.get("max_numbers_per_user") ?? 12),
+      allow_free: formData.get("allow_free") === "on",
+      allow_tracking: formData.get("allow_tracking") === "on",
+      allow_premium: formData.get("allow_premium") === "on",
+      allow_referrals: formData.get("allow_referrals") === "on",
+      tracking_chances: Number(formData.get("tracking_chances") ?? 6),
+      referral_step: Number(formData.get("referral_step") ?? 10),
+      referral_bonus_max: Number(formData.get("referral_bonus_max") ?? 5),
+      legal_text: String(formData.get("legal_text") ?? "")
+    };
+
+    await runPanelAction("upsert_giveaway", { action: "upsert_giveaway", payload }, "Sorteo guardado correctamente.");
+  }
+
+  async function setGiveawayStatus(giveaway: Giveaway, status: Giveaway["status"]) {
+    await runPanelAction(
+      `giveaway-status:${giveaway.id}:${status}`,
+      { action: "set_giveaway_status", giveawayId: giveaway.id, status },
+      "Estado del sorteo actualizado."
+    );
+  }
+
+  async function syncGiveaways() {
+    await runPanelAction("sync_giveaway_tickets", { action: "sync_giveaway_tickets" }, "Tickets sincronizados.");
+  }
+
+  async function loadGiveawayOfficialResult(event: FormEvent<HTMLFormElement>, giveaway: Giveaway) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    await runPanelAction(
+      `giveaway-official:${giveaway.id}`,
+      {
+        action: "load_giveaway_official_result",
+        giveawayId: giveaway.id,
+        officialNumbers: String(formData.get("official_numbers") ?? ""),
+        officialDrawDate: String(formData.get("official_draw_date") ?? "")
+      },
+      "Resultado oficial cargado."
+    );
+  }
+
+  async function runAutomaticGiveaway(giveaway: Giveaway) {
+    await runPanelAction(
+      `giveaway-auto:${giveaway.id}`,
+      { action: "run_giveaway_automatic_fallback", giveawayId: giveaway.id },
+      "Sorteo automatico ejecutado."
+    );
+  }
+
+  function exportGiveaway(giveaway: Giveaway) {
+    window.location.href = `/api/admin/giveaways/export?giveawayId=${encodeURIComponent(giveaway.id)}`;
   }
 
   const isActionLoading = (key: string) => actionLoading === key;
@@ -1190,6 +1299,268 @@ export function AdminScreen() {
                 ))}
                 {!data.referralCreditLedger.length ? <div className="empty-state">Sin creditos de referidos todavia.</div> : null}
               </div>
+            </div>
+          </section>
+        </>
+      ) : null}
+
+      {activeTab === "giveaways" ? (
+        <>
+          <section className="admin-stats admin-stats--wide">
+            <StatCard label="Sorteos activos" value={activeGiveaways.length} />
+            <StatCard label="Tickets emitidos" value={data.giveawayTickets.length} />
+            <StatCard label="Participantes aprox." value={new Set(data.giveawayTickets.map((ticket) => ticket.user_id)).size} />
+            <StatCard
+              helper={latestGiveawayResult ? formatDateTime(latestGiveawayResult.created_at) : "Sin ganador cargado"}
+              label="Ultimo resultado"
+              value={latestGiveawayResult?.winning_number !== null && latestGiveawayResult?.winning_number !== undefined ? formatTicketNumber(latestGiveawayResult.winning_number) : "-"}
+            />
+          </section>
+
+          <section className="admin-command-panel">
+            <div>
+              <p className="eyebrow">Sorteos</p>
+              <h2>Sincronizar tickets</h2>
+              <p>Asigna numeros faltantes por registro, Plan Seguimiento y referidos validos. No borra ni reutiliza tickets.</p>
+            </div>
+            <button className="button" disabled={Boolean(actionLoading)} type="button" onClick={syncGiveaways}>
+              <RefreshCw size={18} />
+              {isActionLoading("sync_giveaway_tickets") ? "Sincronizando..." : "Sincronizar tickets"}
+            </button>
+          </section>
+
+          <section className="admin-two-columns">
+            <div className="admin-panel">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Crear / editar</p>
+                  <h2>Configurar sorteo</h2>
+                </div>
+              </div>
+              <form className="admin-create" onSubmit={saveGiveaway}>
+                <div className="admin-fields">
+                  <label className="field field--tight">
+                    <span>Slug unico</span>
+                    <input name="slug" placeholder="sorteo-mensual-junio" required />
+                  </label>
+                  <label className="field field--tight">
+                    <span>Nombre</span>
+                    <input name="name" placeholder="Sorteo mensual Dolar MZA" required />
+                  </label>
+                  <label className="field field--tight">
+                    <span>Tipo</span>
+                    <select name="type" defaultValue="monthly">
+                      <option value="monthly">Mensual</option>
+                      <option value="annual">Anual</option>
+                      <option value="custom">Especial</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="admin-fields">
+                  <label className="field field--tight">
+                    <span>Premio</span>
+                    <input name="prize_label" placeholder="USD 100 o equivalente en pesos" required />
+                  </label>
+                  <label className="field field--tight">
+                    <span>Moneda</span>
+                    <input defaultValue="USD" name="prize_currency" />
+                  </label>
+                  <label className="field field--tight">
+                    <span>Monto premio</span>
+                    <input defaultValue="100" min="0" name="prize_amount" step="0.01" type="number" />
+                  </label>
+                </div>
+                <div className="admin-fields">
+                  <label className="field field--tight">
+                    <span>Equivalente $</span>
+                    <input name="prize_ars_equivalent" step="0.01" type="number" />
+                  </label>
+                  <label className="field field--tight">
+                    <span>Fecha</span>
+                    <input defaultValue={new Date().toISOString().slice(0, 10)} name="draw_date" required type="date" />
+                  </label>
+                  <label className="field field--tight">
+                    <span>Hora</span>
+                    <input defaultValue="22:00" name="draw_time" required type="time" />
+                  </label>
+                </div>
+                <div className="admin-fields">
+                  <label className="field field--tight">
+                    <span>Estado</span>
+                    <select name="status" defaultValue="active">
+                      <option value="draft">Borrador</option>
+                      <option value="active">Activo</option>
+                      <option value="paused">Pausado</option>
+                      <option value="closed">Cerrado</option>
+                    </select>
+                  </label>
+                  <label className="field field--tight">
+                    <span>Inicio</span>
+                    <input defaultValue={new Date().toISOString()} name="starts_at" />
+                  </label>
+                  <label className="field field--tight">
+                    <span>Cierre</span>
+                    <input name="closes_at" placeholder="Opcional" />
+                  </label>
+                </div>
+                <div className="admin-fields">
+                  <label className="field field--tight">
+                    <span>Max. numeros usuario</span>
+                    <input defaultValue="12" min="1" name="max_numbers_per_user" type="number" />
+                  </label>
+                  <label className="field field--tight">
+                    <span>Chances Seguimiento</span>
+                    <input defaultValue="6" min="1" name="tracking_chances" type="number" />
+                  </label>
+                  <label className="field field--tight">
+                    <span>Max. referidos extra</span>
+                    <input defaultValue="5" min="0" name="referral_bonus_max" type="number" />
+                  </label>
+                </div>
+                <div className="admin-check-grid">
+                  <label className="toggle-line">
+                    <input defaultChecked name="allow_free" type="checkbox" />
+                    Participa cuenta gratis
+                  </label>
+                  <label className="toggle-line">
+                    <input defaultChecked name="allow_tracking" type="checkbox" />
+                    Participa Plan Seguimiento
+                  </label>
+                  <label className="toggle-line">
+                    <input name="allow_premium" type="checkbox" />
+                    Preparar Premium
+                  </label>
+                  <label className="toggle-line">
+                    <input defaultChecked name="allow_referrals" type="checkbox" />
+                    Sumar referidos
+                  </label>
+                </div>
+                <label className="field field--tight">
+                  <span>Bases y condiciones</span>
+                  <textarea name="legal_text" rows={5} placeholder="Texto legal del sorteo" />
+                </label>
+                <button className="button button--full" disabled={isActionLoading("upsert_giveaway")} type="submit">
+                  <Save size={17} />
+                  {isActionLoading("upsert_giveaway") ? "Guardando..." : "Guardar sorteo"}
+                </button>
+              </form>
+            </div>
+
+            <div className="admin-panel">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Historial</p>
+                  <h2>Ultimos logs</h2>
+                </div>
+              </div>
+              <div className="admin-list">
+                {data.giveawayLogs.slice(0, 10).map((log) => (
+                  <article key={log.id}>
+                    <Ticket size={18} />
+                    <div>
+                      <strong>{log.action}</strong>
+                      <span>
+                        {formatDateTime(log.created_at)} / {log.user_id ? profileById.get(log.user_id)?.email ?? log.user_id : "sistema"}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+                {!data.giveawayLogs.length ? <div className="empty-state">Sin logs de sorteos todavia.</div> : null}
+              </div>
+            </div>
+          </section>
+
+          <section className="section">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Administrar</p>
+                <h2>Sorteos cargados</h2>
+              </div>
+            </div>
+            <div className="admin-giveaway-grid">
+              {data.giveaways.map((giveaway) => {
+                const ticketCount = giveawayTicketCount[giveaway.id] ?? 0;
+                const participantCount = giveawayParticipantCount[giveaway.id]?.size ?? 0;
+                const result = data.giveawayResults.find((item) => item.giveaway_id === giveaway.id);
+
+                return (
+                  <article className="admin-giveaway-card" key={giveaway.id}>
+                    <div className="admin-giveaway-card__head">
+                      <div>
+                        <span className="admin-health admin-health--ok">{giveaway.status}</span>
+                        <h3>{giveaway.name}</h3>
+                        <p>
+                          {giveaway.prize_label} / {giveaway.draw_date} {giveaway.draw_time}
+                        </p>
+                      </div>
+                      <Gift size={24} />
+                    </div>
+
+                    <div className="account-meta-grid">
+                      <article>
+                        <span>Participantes</span>
+                        <strong>{participantCount}</strong>
+                      </article>
+                      <article>
+                        <span>Tickets</span>
+                        <strong>{ticketCount}</strong>
+                      </article>
+                      <article>
+                        <span>Ganador</span>
+                        <strong>
+                          {result?.winning_number !== null && result?.winning_number !== undefined
+                            ? formatTicketNumber(result.winning_number)
+                            : "Pendiente"}
+                        </strong>
+                      </article>
+                    </div>
+
+                    <div className="button-row">
+                      <button className="button button--small button--ghost" type="button" onClick={() => setGiveawayStatus(giveaway, "active")}>
+                        <Play size={14} />
+                        Activar
+                      </button>
+                      <button className="button button--small button--ghost" type="button" onClick={() => setGiveawayStatus(giveaway, "paused")}>
+                        <Pause size={14} />
+                        Pausar
+                      </button>
+                      <button className="button button--small button--danger" type="button" onClick={() => setGiveawayStatus(giveaway, "closed")}>
+                        Cerrar
+                      </button>
+                      <button className="button button--small button--ghost" type="button" onClick={() => exportGiveaway(giveaway)}>
+                        <Download size={14} />
+                        CSV
+                      </button>
+                    </div>
+
+                    <form className="admin-create admin-create--compact" onSubmit={(event) => loadGiveawayOfficialResult(event, giveaway)}>
+                      <label className="field field--tight">
+                        <span>Numeros oficiales Quiniela 1 al 20</span>
+                        <input name="official_numbers" placeholder="1234, 5678, 9012..." />
+                      </label>
+                      <label className="field field--tight">
+                        <span>Fecha oficial</span>
+                        <input name="official_draw_date" type="date" />
+                      </label>
+                      <button className="button button--full" disabled={isActionLoading(`giveaway-official:${giveaway.id}`)} type="submit">
+                        <Trophy size={17} />
+                        {isActionLoading(`giveaway-official:${giveaway.id}`) ? "Buscando..." : "Buscar ganador oficial"}
+                      </button>
+                    </form>
+
+                    <button
+                      className="button button--ghost button--full"
+                      disabled={isActionLoading(`giveaway-auto:${giveaway.id}`)}
+                      type="button"
+                      onClick={() => runAutomaticGiveaway(giveaway)}
+                    >
+                      <Shuffle size={17} />
+                      {isActionLoading(`giveaway-auto:${giveaway.id}`) ? "Sorteando..." : "Sorteo automatico sin coincidencia"}
+                    </button>
+                  </article>
+                );
+              })}
+              {!data.giveaways.length ? <div className="empty-state">Ejecuta supabase/giveaways.sql para activar el modulo de sorteos.</div> : null}
             </div>
           </section>
         </>
