@@ -492,23 +492,23 @@ insert into public.giveaways (
 )
 values
   (
-    'sorteo-mensual-base',
-    'Sorteo mensual Dolar MZA',
+    'sorteo-julio-2026',
+    'Sorteo Julio Dolar MZA',
     'monthly',
     'USD 100 o equivalente en pesos',
     'USD',
     100,
-    (date_trunc('month', now()) + interval '1 month - 1 day')::date,
+    '2026-07-31'::date,
     '22:00',
     'active',
-    date_trunc('month', now()),
-    (date_trunc('month', now()) + interval '1 month') - interval '1 second',
+    now(),
+    '2026-07-31 23:59:59-03'::timestamptz,
     'quiniela_mendoza_nocturna',
     true,
     true,
     false,
     true,
-    'Participan usuarios registrados de Dolar MZA segun las reglas configuradas. El resultado se define con referencia a la Quiniela Nocturna de Mendoza. Si no hay coincidencia entre premios oficiales y tickets activos, se realiza sorteo automatico auditable entre tickets activos.'
+    'Participan usuarios registrados de Dolar MZA segun las reglas configuradas. Premio: USD 100 o equivalente en pesos definido por administracion. El resultado se define con referencia al ultimo sorteo de la Quiniela Nocturna de Mendoza de julio 2026. Si no hay coincidencia entre premios oficiales y tickets activos, se realiza sorteo automatico auditable entre tickets activos.'
   ),
   (
     'sorteo-anual-base',
@@ -531,14 +531,27 @@ values
   )
 on conflict (slug) do update
 set name = excluded.name,
+    type = excluded.type,
     prize_label = excluded.prize_label,
     prize_currency = excluded.prize_currency,
     prize_amount = excluded.prize_amount,
+    prize_ars_equivalent = excluded.prize_ars_equivalent,
+    draw_date = excluded.draw_date,
+    draw_time = excluded.draw_time,
+    status = excluded.status,
+    starts_at = excluded.starts_at,
+    closes_at = excluded.closes_at,
     selection_method = excluded.selection_method,
     allow_free = excluded.allow_free,
     allow_tracking = excluded.allow_tracking,
     allow_premium = excluded.allow_premium,
     allow_referrals = excluded.allow_referrals,
+    free_chances = excluded.free_chances,
+    tracking_chances = excluded.tracking_chances,
+    premium_chances = excluded.premium_chances,
+    referral_step = excluded.referral_step,
+    referral_bonus_chances = excluded.referral_bonus_chances,
+    referral_bonus_max = excluded.referral_bonus_max,
     legal_text = excluded.legal_text;
 
 select public.sync_giveaway_tickets(null);
